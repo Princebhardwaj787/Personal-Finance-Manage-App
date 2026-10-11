@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment files — never commit secrets (.env.example is kept)
+.env
+.env.local
+.env.*.local
+
+# SQLite local database files (recreate with `npx prisma migrate dev`)
+*.db
+*.db-*
+*.db-journal
+*.db-shm
+*.db-wal
+*.bak
+
+# Freebuff workspace metadata
+.freebuff/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
