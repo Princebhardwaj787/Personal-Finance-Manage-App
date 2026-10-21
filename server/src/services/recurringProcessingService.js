@@ -1,6 +1,7 @@
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { createNotification } from './notificationService.js';
+import { fromMinorUnits } from '../utils/money.js';
 import {
   addUtcDays,
   addUtcMonths,
@@ -202,7 +203,7 @@ const createOccurrence = async (userId, item, dueDate, nextDueDate) => {
         select: { name: true, balance: true }
       });
       throw new AppError(
-        `Insufficient balance in ${owned?.name ?? 'account'} (available ${owned?.balance ?? 0}, needed ${live.amount})`,
+        `Insufficient balance in ${owned?.name ?? 'account'} (available ${fromMinorUnits(owned?.balance ?? 0)}, needed ${fromMinorUnits(live.amount)})`,
         400
       );
     }
@@ -271,7 +272,7 @@ const previewOccurrence = async (userId, item) => {
   if (account.balance < live.amount) {
     return {
       outcome: 'would-fail',
-      reason: `Insufficient balance in ${account.name} (available ${account.balance}, needed ${live.amount})`
+      reason: `Insufficient balance in ${account.name} (available ${fromMinorUnits(account.balance)}, needed ${fromMinorUnits(live.amount)})`
     };
   }
   return { outcome: 'would-create' };
@@ -387,12 +388,12 @@ export const processDueRecurringTransactions = async (userId, options = {}) => {
             type: 'PAYMENT_PROCESSED',
             priority: 'INFO',
             title: `Payment processed: ${item.name}`,
-            message: `Your recurring payment "${item.name}" of ₹${item.amount} was processed on ${dayString(dueDate)}.`,
+            message: `Your recurring payment "${item.name}" of ₹${fromMinorUnits(item.amount)} was processed on ${dayString(dueDate)}.`,
             dedupeKey: `payment:${item.id}:${dayString(dueDate)}:PROCESSED`,
             metadata: {
               recurringExpenseId: item.id,
               name: item.name,
-              amount: item.amount,
+              amount: fromMinorUnits(item.amount),
               dueDate: dayString(dueDate),
               transactionId: created.transactionId
             }
@@ -420,12 +421,12 @@ export const processDueRecurringTransactions = async (userId, options = {}) => {
               type: 'PAYMENT_FAILED',
               priority: 'IMPORTANT',
               title: `Payment failed: ${item.name}`,
-              message: `We couldn't process your recurring payment "${item.name}" of ₹${item.amount} due on ${dayString(dueDate)}. Please check your account balance and try again.`,
+              message: `We couldn't process your recurring payment "${item.name}" of ₹${fromMinorUnits(item.amount)} due on ${dayString(dueDate)}. Please check your account balance and try again.`,
               dedupeKey: `payment:${item.id}:${dayString(dueDate)}:FAILED`,
               metadata: {
                 recurringExpenseId: item.id,
                 name: item.name,
-                amount: item.amount,
+                amount: fromMinorUnits(item.amount),
                 dueDate: dayString(dueDate),
                 reason: error instanceof AppError ? detail.reason : 'Processing error'
               }

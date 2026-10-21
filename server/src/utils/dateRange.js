@@ -105,9 +105,6 @@ export const parseIsoDay = (value, field = 'Date') => {
   return date;
 };
 
-const formatDay = (date) =>
-  `${date.getUTCDate()} ${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-
 const formatMonthYear = (year, month) => `${MONTHS_LONG[month - 1]} ${year}`;
 
 const formatMonthYearShort = (year, month) => `${MONTHS_SHORT[month - 1]} ${year}`;

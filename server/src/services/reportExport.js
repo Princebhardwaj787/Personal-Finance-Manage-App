@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit';
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { round2 } from '../utils/goalCalculator.js';
+import { fromMinorUnits } from '../utils/money.js';
 import { buildTransactionWhere } from './transactionService.js';
 import { resolveRange } from '../utils/dateRange.js';
 import { getReport, recordReportHistory } from './reportService.js';
@@ -91,7 +92,8 @@ const transactionToCsvRow = (txn) => [
   txn.category?.name ?? 'Uncategorized',
   txn.account?.name ?? '',
   txn.type,
-  round2(txn.amount),
+  // Stored in minor units; convert to decimal major units for the CSV.
+  fromMinorUnits(txn.amount),
   txn.notes ?? ''
 ];
 
@@ -235,7 +237,6 @@ const resolveExportContext = async (userId, query, type) => {
 /* ------------------------------------------------------------------ */
 
 const PDF_MARGIN = 50;
-const PDF_CONTENT_WIDTH = 595 - PDF_MARGIN * 2; // A4 width minus margins
 
 const drawTable = (doc, columns, rows) => {
   const rowHeight = 22;

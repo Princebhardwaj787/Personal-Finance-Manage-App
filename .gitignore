@@ -17,6 +17,13 @@ build/
 *.db-shm
 *.db-wal
 *.bak
+*.restoring
+# Database backups (create with `npm run db:backup`)
+server/prisma/backups/
+server/prisma/roundtrip-backups/
+server/prisma/*.pre-restore.db
+# Test database
+server/test.db
 
 # Freebuff workspace metadata
 .freebuff/

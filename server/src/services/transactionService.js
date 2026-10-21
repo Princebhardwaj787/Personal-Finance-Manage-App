@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { dateFilter } from '../utils/dateRange.js';
 import { buildOrderBy } from '../utils/sortOrder.js';
+import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
 
 /**
  * TRANSACTION SERVICE
@@ -61,10 +62,11 @@ const optionalText = (value, maxLength, field) => {
 };
 
 const parseAmount = (value, field = 'Amount') => {
+  if (!Number.isFinite(Number(value))) throw new AppError(`${field} must be a number`, 400);
   const amount = Number(value);
-  if (!Number.isFinite(amount)) throw new AppError(`${field} must be a number`, 400);
   if (amount <= 0) throw new AppError(`${field} must be greater than 0`, 400);
-  return amount;
+  // Decimal input (e.g. 100.50) -> integer minor units (10050). Exact, no float drift.
+  return toMinorUnits(amount);
 };
 
 const parseDate = (value, field = 'Date') => {
@@ -102,14 +104,15 @@ export const buildTransactionWhere = (userId, filters = {}) => {
     if (!Number.isFinite(value) || value < 0) {
       throw new AppError('minAmount must be a non-negative number', 400);
     }
-    amountFilter.gte = value;
+    // Filter values arrive as decimal major units; the column stores minor units.
+    amountFilter.gte = toMinorUnits(value);
   }
   if (maxAmount !== undefined && maxAmount !== null && maxAmount !== '') {
     const value = Number(maxAmount);
     if (!Number.isFinite(value) || value < 0) {
       throw new AppError('maxAmount must be a non-negative number', 400);
     }
-    amountFilter.lte = value;
+    amountFilter.lte = toMinorUnits(value);
   }
   if (amountFilter.gte !== undefined && amountFilter.lte !== undefined && amountFilter.gte > amountFilter.lte) {
     throw new AppError('minAmount cannot be greater than maxAmount', 400);
@@ -145,7 +148,8 @@ export const resolveOrderBy = (sortBy = 'date', sortOrder = 'desc') =>
 export const serializeTransaction = (transaction) => ({
   id: transaction.id,
   type: transaction.type,
-  amount: transaction.amount,
+  // Integer minor units (paise) -> decimal major units for API output (presentation boundary).
+  amount: fromMinorUnits(transaction.amount),
   description: transaction.description ?? null,
   notes: transaction.notes ?? null,
   reference: transaction.reference ?? null,
@@ -377,9 +381,11 @@ export const deleteTransaction = async (userId, transactionId) => {
 export const duplicateTransaction = async (userId, transactionId, payload = {}) => {
   const source = await findOwned(userId, transactionId);
 
+  // `source.amount` is stored in minor units; convert back to decimal so
+  // `createTransaction` (which re-applies `toMinorUnits`) stores it correctly.
   return createTransaction(userId, {
     type: source.type,
-    amount: source.amount,
+    amount: fromMinorUnits(source.amount),
     description: source.description,
     notes: source.notes,
     reference: source.reference,
@@ -446,13 +452,13 @@ export const getTransactionSummary = async (userId, options = {}) => {
     prisma.transaction.aggregate({ where: { ...where, type: 'EXPENSE' }, _sum: { amount: true } })
   ]);
 
-  const totalIncome = income._sum.amount || 0;
-  const totalExpenses = expenses._sum.amount || 0;
+  const totalIncomeMinor = income._sum.amount || 0;
+  const totalExpensesMinor = expenses._sum.amount || 0;
 
   return {
-    totalIncome,
-    totalExpenses,
-    netSavings: totalIncome - totalExpenses
+    totalIncome: fromMinorUnits(totalIncomeMinor),
+    totalExpenses: fromMinorUnits(totalExpensesMinor),
+    netSavings: fromMinorUnits(totalIncomeMinor - totalExpensesMinor)
   };
 };
 
@@ -460,11 +466,18 @@ export const getTransactionsByCategory = async (userId, options = {}) => {
   const { type = 'EXPENSE' } = options;
   const where = { ...buildTransactionWhere(userId, options), type };
 
-  return prisma.transaction.groupBy({
+  const rows = await prisma.transaction.groupBy({
     by: ['categoryId'],
     where,
     _sum: { amount: true },
-    _count: { id: true },
+    _count: { _all: true },
     orderBy: { _sum: { amount: 'desc' } }
   });
+
+  // `_sum.amount` is stored in minor units; convert to decimal for the client.
+  return rows.map((row) => ({
+    categoryId: row.categoryId,
+    amount: fromMinorUnits(row._sum.amount ?? 0),
+    count: row._count._all
+  }));
 };

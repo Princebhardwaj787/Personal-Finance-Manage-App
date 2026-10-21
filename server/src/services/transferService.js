@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { dateFilter } from '../utils/dateRange.js';
 import { buildOrderBy } from '../utils/sortOrder.js';
+import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
 
 /**
  * TRANSFER SERVICE (Phase 7 §B)
@@ -38,7 +39,8 @@ const TRANSFER_SELECT = {
 
 const serializeTransfer = (transfer) => ({
   id: transfer.id,
-  amount: transfer.amount,
+  // Integer minor units (paise) -> decimal major units for API output.
+  amount: fromMinorUnits(transfer.amount),
   date: transfer.date,
   description: transfer.description ?? null,
   fromAccountId: transfer.fromAccountId,
@@ -50,10 +52,11 @@ const serializeTransfer = (transfer) => ({
 });
 
 const parseAmount = (value) => {
+  if (!Number.isFinite(Number(value))) throw new AppError('Amount must be a number', 400);
   const amount = Number(value);
-  if (!Number.isFinite(amount)) throw new AppError('Amount must be a number', 400);
   if (amount <= 0) throw new AppError('Amount must be greater than 0', 400);
-  return amount;
+  // Decimal input (e.g. 100.50) -> integer minor units (10050).
+  return toMinorUnits(amount);
 };
 
 const parseDate = (value) => {
@@ -133,7 +136,7 @@ export const createTransfer = async (userId, payload = {}) => {
       });
       if (!owned) throw new AppError('Source account not found or does not belong to you', 404);
       throw new AppError(
-        `Insufficient balance in ${owned.name} (available ${owned.balance}, transfer ${amount})`,
+        `Insufficient balance in ${owned.name} (available ${fromMinorUnits(owned.balance)}, transfer ${fromMinorUnits(amount)})`,
         400
       );
     }
@@ -273,7 +276,7 @@ export const updateTransfer = async (userId, transferId, payload = {}) => {
       });
       if (!owned) throw new AppError('Source account not found or does not belong to you', 404);
       throw new AppError(
-        `Insufficient balance in ${owned.name} (available ${owned.balance}, transfer ${amount})`,
+        `Insufficient balance in ${owned.name} (available ${fromMinorUnits(owned.balance)}, transfer ${fromMinorUnits(amount)})`,
         400
       );
     }
@@ -332,7 +335,7 @@ export const getTransferSummary = async (userId, options = {}) => {
   ]);
 
   return {
-    totalAmount: aggregate._sum.amount ?? 0,
+    totalAmount: fromMinorUnits(aggregate._sum.amount ?? 0),
     count
   };
 };

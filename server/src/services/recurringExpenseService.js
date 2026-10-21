@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
 import {
   FREQUENCIES,
   summarize,
@@ -41,7 +42,8 @@ const assertPositive = (value, field) => {
   const num = Number(value);
   if (!Number.isFinite(num)) throw new AppError(`${field} must be a number`, 400);
   if (num <= 0) throw new AppError(`${field} must be greater than 0`, 400);
-  return num;
+  // Decimal input (major units) -> integer minor units (paise).
+  return toMinorUnits(num);
 };
 
 const assertFrequency = (value) => {
@@ -205,7 +207,8 @@ export const getSummary = async (userId, { days = 30 } = {}) => {
       ? {
           id: nextRow.id,
           name: nextRow.name,
-          amount: nextRow.amount,
+          // Stored in minor units; convert to decimal for the client.
+          amount: fromMinorUnits(nextRow.amount),
           nextDueDate: nextRow.nextDueDate,
           daysUntilDue: daysUntil(nextRow.nextDueDate)
         }

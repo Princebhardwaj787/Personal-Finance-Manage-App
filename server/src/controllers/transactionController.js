@@ -1,5 +1,6 @@
 import * as transactionService from '../services/transactionService.js';
 import * as transferService from '../services/transferService.js';
+import { recordFromRequest, AUDIT_ACTIONS } from '../services/auditService.js';
 
 const handle = (fn) => async (req, res, next) => {
   try {
@@ -80,18 +81,31 @@ export const getTransaction = handle(async (req, res) => {
 /** POST /api/transactions */
 export const createTransactionController = handle(async (req, res) => {
   const transaction = await transactionService.createTransaction(req.user.id, req.body);
+  await recordFromRequest(req, AUDIT_ACTIONS.TRANSACTION_CREATE, {
+    metadata: {
+      transactionId: transaction.id,
+      type: transaction.type,
+      accountId: transaction.accountId
+    }
+  });
   res.status(201).json({ transaction });
 });
 
 /** PUT /api/transactions/:id */
 export const updateTransactionController = handle(async (req, res) => {
   const transaction = await transactionService.updateTransaction(req.user.id, req.params.id, req.body);
+  await recordFromRequest(req, AUDIT_ACTIONS.TRANSACTION_UPDATE, {
+    metadata: { transactionId: transaction.id, type: transaction.type }
+  });
   res.json({ transaction });
 });
 
 /** DELETE /api/transactions/:id */
 export const deleteTransactionController = handle(async (req, res) => {
   await transactionService.deleteTransaction(req.user.id, req.params.id);
+  await recordFromRequest(req, AUDIT_ACTIONS.TRANSACTION_DELETE, {
+    metadata: { transactionId: req.params.id }
+  });
   res.json({ message: 'Transaction deleted successfully' });
 });
 
@@ -108,6 +122,9 @@ export const duplicateTransactionController = handle(async (req, res) => {
 /** POST /api/transactions/bulk-delete — atomic, ownership re-checked per id. */
 export const bulkDeleteTransactionsController = handle(async (req, res) => {
   const result = await transactionService.bulkDeleteTransactions(req.user.id, req.body?.ids);
+  await recordFromRequest(req, AUDIT_ACTIONS.TRANSACTION_DELETE, {
+    metadata: { deletedCount: result?.deleted ?? 0, bulk: true }
+  });
   res.json(result);
 });
 

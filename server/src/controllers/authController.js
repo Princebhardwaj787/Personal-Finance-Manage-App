@@ -17,7 +17,10 @@ export const register = async (req, res, next) => {
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const { user, token } = await loginUser(email, password);
+    const { user, token } = await loginUser(email, password, {
+      route: 'POST /api/auth/login',
+      ip: req.ip
+    });
     
     res.json({
       user,

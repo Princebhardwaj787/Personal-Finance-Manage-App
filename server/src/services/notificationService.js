@@ -3,6 +3,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { getBudgetOverview } from './budgetService.js';
 import { GOAL_STATUS } from '../utils/goalCalculator.js';
 import { toUtcDay } from '../utils/dateRange.js';
+import { fromMinorUnits } from '../utils/money.js';
 
 /** Local helper: Date -> 'YYYY-MM-DD' (UTC), matching recurringProcessingService. */
 const dayString = (date) => date.toISOString().slice(0, 10);
@@ -372,12 +373,12 @@ export const createUpcomingPaymentAlerts = async (userId, { now = new Date() } =
         type: 'UPCOMING_PAYMENT',
         priority: 'WARNING',
         title: `Upcoming payment: ${item.name}`,
-        message: `Your recurring payment "${item.name}" of ₹${item.amount} is due in ${milestone} day${milestone === 1 ? '' : 's'} (${dayString(dueDay)}).`,
+        message: `Your recurring payment "${item.name}" of ₹${fromMinorUnits(item.amount)} is due in ${milestone} day${milestone === 1 ? '' : 's'} (${dayString(dueDay)}).`,
         dedupeKey: `upcoming:${item.id}:${dayString(dueDay)}:${milestone}`,
         metadata: {
           recurringExpenseId: item.id,
           name: item.name,
-          amount: item.amount,
+          amount: fromMinorUnits(item.amount),
           dueDate: dayString(dueDay),
           daysUntil: milestone
         }
@@ -414,18 +415,22 @@ export const createGoalAlerts = async (userId, { now = new Date() } = {}) => {
   let created = 0;
 
   for (const goal of goals) {
+    // Goal amounts are stored in minor units; convert for user-facing copy.
+    const target = fromMinorUnits(goal.targetAmount);
+    const current = fromMinorUnits(goal.currentAmount);
+
     if (goal.status === GOAL_STATUS.COMPLETED) {
       const result = await createNotification(userId, {
         type: 'GOAL_COMPLETED',
         priority: 'INFO',
         title: `Goal completed: ${goal.name}`,
-        message: `You have reached your target of ₹${goal.targetAmount} for "${goal.name}".`,
+        message: `You have reached your target of ₹${target} for "${goal.name}".`,
         dedupeKey: `goal:${goal.id}:COMPLETED`,
         metadata: {
           goalId: goal.id,
           name: goal.name,
-          targetAmount: goal.targetAmount,
-          currentAmount: goal.currentAmount
+          targetAmount: target,
+          currentAmount: current
         }
       });
       if (result) created += 1;
@@ -443,14 +448,14 @@ export const createGoalAlerts = async (userId, { now = new Date() } = {}) => {
       priority: 'WARNING',
       title: `Goal deadline: ${goal.name}`,
       message: daysUntil === 0
-        ? `Your goal "${goal.name}" is due today (target ₹${goal.targetAmount}, saved ₹${goal.currentAmount}).`
-        : `Your goal "${goal.name}" is due in ${daysUntil} day${daysUntil === 1 ? '' : 's'} (${dayString(targetDay)}). Saved ₹${goal.currentAmount} of ₹${goal.targetAmount}.`,
+        ? `Your goal "${goal.name}" is due today (target ₹${target}, saved ₹${current}).`
+        : `Your goal "${goal.name}" is due in ${daysUntil} day${daysUntil === 1 ? '' : 's'} (${dayString(targetDay)}). Saved ₹${current} of ₹${target}.`,
       dedupeKey: `goal:${goal.id}:${dayString(targetDay)}:DEADLINE`,
       metadata: {
         goalId: goal.id,
         name: goal.name,
-        targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount,
+        targetAmount: target,
+        currentAmount: current,
         targetDate: dayString(targetDay),
         daysUntil
       }
@@ -479,13 +484,14 @@ export const createLowBalanceAlerts = async (userId, { now = new Date() } = {}) 
   let created = 0;
 
   for (const account of accounts) {
+    // Comparison in minor units (both stored columns are minor units).
     if (account.balance > account.lowBalanceThreshold) continue;
 
     const result = await createNotification(userId, {
       type: 'LOW_BALANCE',
       priority: 'WARNING',
       title: `Low balance: ${account.name}`,
-      message: `Your account "${account.name}" balance is ₹${account.balance}, at or below your threshold of ₹${account.lowBalanceThreshold}.`,
+      message: `Your account "${account.name}" balance is ₹${fromMinorUnits(account.balance)}, at or below your threshold of ₹${fromMinorUnits(account.lowBalanceThreshold)}.`,
       dedupeKey: `lowbalance:${account.id}:${dayKey}`,
       metadata: {
         accountId: account.id,

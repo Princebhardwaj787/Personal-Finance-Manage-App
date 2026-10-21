@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { hashPassword, comparePassword } from '../utils/password.js';
 import { createAccessToken } from '../utils/jwt.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { record, AUDIT_ACTIONS, AUDIT_OUTCOMES } from './auditService.js';
 
 const DEFAULT_CATEGORIES = [
   { name: 'Salary', type: 'INCOME', icon: '💰', color: '#22c55e' },
@@ -47,22 +48,50 @@ export const registerUser = async (email, password, name) => {
   return { user: userWithoutPassword, token };
 };
 
-export const loginUser = async (email, password) => {
+export const loginUser = async (email, password, context = {}) => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
+    // Record the failure without revealing whether the account exists.
+    await record({
+      userId: null,
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
+      outcome: AUDIT_OUTCOMES.FAILURE,
+      source: 'API',
+      route: context.route ?? 'POST /api/auth/login',
+      ip: context.ip ?? null,
+      metadata: { reason: 'unknown_email' }
+    });
     throw new AppError('Invalid credentials', 401);
   }
 
   const isValid = await comparePassword(password, user.passwordHash);
   if (!isValid) {
+    await record({
+      userId: user.id,
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
+      outcome: AUDIT_OUTCOMES.FAILURE,
+      source: 'API',
+      route: context.route ?? 'POST /api/auth/login',
+      ip: context.ip ?? null,
+      metadata: { reason: 'invalid_password' }
+    });
     throw new AppError('Invalid credentials', 401);
   }
 
   const token = createAccessToken(user);
 
+  await record({
+    userId: user.id,
+    action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS,
+    outcome: AUDIT_OUTCOMES.SUCCESS,
+    source: 'API',
+    route: context.route ?? 'POST /api/auth/login',
+    ip: context.ip ?? null
+  });
+
   // Exclude passwordHash from response
-  const { passwordHash, ...userWithoutPassword } = user;
-  
+  const { passwordHash: _passwordHash, ...userWithoutPassword } = user;
+
   return { user: userWithoutPassword, token };
 };
 
@@ -120,6 +149,14 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash }
+  });
+
+  await record({
+    userId,
+    action: AUDIT_ACTIONS.AUTH_PASSWORD_CHANGE,
+    outcome: AUDIT_OUTCOMES.SUCCESS,
+    source: 'API',
+    route: 'PUT /api/auth/password'
   });
 
   return { success: true };

@@ -1,9 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import morgan from 'morgan';
 import { config } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import {
+  securityHeaders,
+  apiRateLimiter,
+  authRateLimiter,
+  registerRateLimiter
+} from './middleware/security.js';
+import { requestLogger } from './middleware/requestLogger.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/accounts.js';
 import categoryRoutes from './routes/categories.js';
@@ -21,19 +27,40 @@ import { processScheduledNotifications } from './services/notificationService.js
 
 const app = express();
 
+// Behind a reverse proxy, trust X-Forwarded-* ONLY when explicitly enabled.
+// Otherwise a client could spoof its IP and defeat the rate limiter.
+if (config.security.trustProxy) {
+  app.set('trust proxy', 1);
+}
+
+app.disable('x-powered-by');
+
+// Security headers (CSP, HSTS, no-sniff, frame-ancestors, referrer policy).
+app.use(securityHeaders(config));
+
 app.use(cors({
   origin: config.client.url,
   credentials: true,
   // Lets the SPA read the download filename from Content-Disposition (§22).
   exposedHeaders: ['Content-Disposition']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.use(morgan('dev'));
+
+// Structured, redacted request logging (replaces morgan's dev format).
+app.use(requestLogger());
+
+// Global ceiling so one client cannot saturate the database.
+app.use('/api', apiRateLimiter);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Credential endpoints get the strict brute-force limiter.
+app.use('/api/auth/register', registerRateLimiter);
+app.use('/api/auth/login', authRateLimiter);
+app.use('/api/auth/password', authRateLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);
@@ -52,9 +79,13 @@ app.use('/api/notification-preferences', notificationPreferenceRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(config.server.port, () => {
-  console.log(`Server running on port ${config.server.port} in ${config.server.nodeEnv} mode`);
-});
+// The app is exported for integration tests, which import it instead of
+// starting a real listener. In test mode we never bind a port.
+if (config.server.nodeEnv !== 'test') {
+  app.listen(config.server.port, () => {
+    console.log(`Server running on port ${config.server.port} in ${config.server.nodeEnv} mode`);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Scheduled notification processor (Phase 9).

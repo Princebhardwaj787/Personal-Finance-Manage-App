@@ -6,7 +6,13 @@
  *
  * Recurring expenses are tracking/planning records only. Nothing in this
  * module ever creates a Transaction.
+ *
+ * Monetary amounts on recurring-expense rows are stored in integer minor
+ * units (paise). `toMonthly` and `toYearly` convert to decimal major units
+ * for API output.
  */
+
+import { fromMinorUnits } from './money.js';
 
 export const FREQUENCIES = Object.freeze(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']);
 
@@ -34,13 +40,15 @@ const isKnownFrequency = (frequency) =>
 /** WEEKLY ×52 · MONTHLY ×12 · QUARTERLY ×4 · YEARLY ×1 */
 export const toYearly = (amount, frequency) => {
   if (!isKnownFrequency(frequency)) return 0;
-  return round2(Number(amount) * OCCURRENCES_PER_YEAR[frequency]);
+  // `amount` is stored in minor units; convert to decimal major units.
+  return round2(fromMinorUnits(Number(amount)) * OCCURRENCES_PER_YEAR[frequency]);
 };
 
 /** Yearly cost normalised to a month (weekly ×52/12, quarterly ×4/12). */
 export const toMonthly = (amount, frequency) => {
   if (!isKnownFrequency(frequency)) return 0;
-  return round2((Number(amount) * OCCURRENCES_PER_YEAR[frequency]) / 12);
+  // `amount` is stored in minor units; convert to decimal major units.
+  return round2((fromMinorUnits(Number(amount)) * OCCURRENCES_PER_YEAR[frequency]) / 12);
 };
 
 export const frequencyLabel = (frequency) => FREQUENCY_LABELS[frequency] || '';
@@ -88,7 +96,8 @@ export const summarize = (items = []) => {
 export const serializeRecurringExpense = (item) => ({
   id: item.id,
   name: item.name,
-  amount: item.amount,
+  // Stored in minor units; convert to decimal major units for the client.
+  amount: fromMinorUnits(item.amount),
   frequency: item.frequency,
   frequencyLabel: frequencyLabel(item.frequency),
   monthlyAmount: toMonthly(item.amount, item.frequency),

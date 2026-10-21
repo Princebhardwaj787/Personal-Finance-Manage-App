@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { toMinorUnits } from '../utils/money.js';
 import {
   CATEGORY_SELECT,
   calculateBudgetStatus,
@@ -68,7 +69,8 @@ export const createBudget = async (req, res, next) => {
         userId,
         categoryId,
         name: `${category.name} budget`,
-        amount: parseFloat(amount),
+        // Decimal input (major units) -> integer minor units (paise).
+        amount: toMinorUnits(parseFloat(amount)),
         month: parseInt(month),
         year: parseInt(year)
       }
@@ -158,7 +160,8 @@ export const updateBudget = async (req, res, next) => {
 
     // Build update data - only allow specified fields
     const updateData = {};
-    if (amount !== undefined) updateData.amount = parseFloat(amount);
+    // Decimal input (major units) -> integer minor units (paise).
+    if (amount !== undefined) updateData.amount = toMinorUnits(parseFloat(amount));
     if (month !== undefined) updateData.month = parseInt(month);
     if (year !== undefined) updateData.year = parseInt(year);
 

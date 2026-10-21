@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import { round2 } from '../utils/goalCalculator.js';
+import { fromMinorUnits } from '../utils/money.js';
 import {
   addUtcDays,
   enumerateBuckets,
@@ -66,13 +67,14 @@ export const fetchTypeTotals = async (userId, start, end, filters = {}) => {
   ]);
 
   const byType = Object.fromEntries(
-    rows.map((row) => [row.type, round2(row._sum.amount ?? 0)])
+    rows.map((row) => [row.type, fromMinorUnits(row._sum.amount ?? 0)])
   );
 
   return {
     income: byType.INCOME ?? 0,
     expense: byType.EXPENSE ?? 0,
-    transfer: round2(transfers._sum.amount ?? 0)
+    // Transfers are stored separately and never counted as income/expense.
+    transfer: fromMinorUnits(transfers._sum.amount ?? 0)
   };
 };
 
@@ -128,7 +130,7 @@ export const getDashboardSummary = async (userId, range) => {
   ]);
 
   const totals = Object.fromEntries(
-    byType.map((row) => [row.type, round2(row._sum.amount ?? 0)])
+    byType.map((row) => [row.type, fromMinorUnits(row._sum.amount ?? 0)])
   );
 
   const income = totals.INCOME ?? 0;
@@ -137,10 +139,11 @@ export const getDashboardSummary = async (userId, range) => {
 
   return {
     period: periodShape(range),
-    totalBalance: round2(balanceAgg._sum.balance ?? 0),
+    // Account balances stored in minor units; convert to decimal.
+    totalBalance: fromMinorUnits(balanceAgg._sum.balance ?? 0),
     totalIncome: income,
     totalExpenses: expenses,
-    totalTransfers: round2(transfers._sum.amount ?? 0),
+    totalTransfers: fromMinorUnits(transfers._sum.amount ?? 0),
     netSavings: rate.savings,
     savingsRate: rate.savingsRate,
     hasIncome: rate.hasIncome,
@@ -220,13 +223,12 @@ export const getCategorySpending = async (userId, range, filters = {}) => {
     : [];
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-  const totalExpenses = round2(
-    rows.reduce((sum, row) => sum + (row._sum.amount ?? 0), 0)
-  );
+  const totalExpensesMinor = rows.reduce((sum, row) => sum + (row._sum.amount ?? 0), 0);
+  const totalExpenses = fromMinorUnits(totalExpensesMinor);
 
   const items = rows.map((row) => {
     const category = row.categoryId ? categoryById.get(row.categoryId) : null;
-    const amount = round2(row._sum.amount ?? 0);
+    const amount = fromMinorUnits(row._sum.amount ?? 0);
     return {
       categoryId: row.categoryId,
       name: category?.name ?? 'Uncategorized',
@@ -301,7 +303,11 @@ export const getWidgetData = async (
   ]);
 
   return {
-    recentTransactions,
+    // Transaction amounts are stored in minor units; convert to decimal.
+    recentTransactions: recentTransactions.map((t) => ({
+      ...t,
+      amount: fromMinorUnits(t.amount)
+    })),
     savingsGoals: goals.slice(0, safeGoalLimit),
     savingsGoalsTotal: goals.length,
     upcomingPayments: upcoming.upcoming,

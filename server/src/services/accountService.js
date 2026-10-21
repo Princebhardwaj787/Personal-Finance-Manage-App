@@ -1,8 +1,9 @@
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
 
 export const getAccounts = async (userId) => {
-  return prisma.account.findMany({
+  const accounts = await prisma.account.findMany({
     where: { userId },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     include: {
@@ -17,7 +18,19 @@ export const getAccounts = async (userId) => {
       }
     }
   });
+  return accounts.map(serializeAccount);
 };
+
+/** Convert stored minor-unit balances to decimal for API output. */
+export const serializeAccount = (account) => ({
+  ...account,
+  // Integer minor units (paise) -> decimal major units for the client.
+  balance: fromMinorUnits(account.balance),
+  lowBalanceThreshold:
+    account.lowBalanceThreshold === null || account.lowBalanceThreshold === undefined
+      ? null
+      : fromMinorUnits(account.lowBalanceThreshold)
+});
 
 export const getAccountById = async (userId, accountId) => {
   const account = await prisma.account.findFirst({
@@ -35,7 +48,7 @@ export const getAccountById = async (userId, accountId) => {
     throw new AppError('Account not found', 404);
   }
   
-  return account;
+  return serializeAccount(account);
 };
 
 export const createAccount = async (userId, data) => {
@@ -48,19 +61,24 @@ export const createAccount = async (userId, data) => {
     });
   }
 
-  return prisma.account.create({
+  const created = await prisma.account.create({
     data: {
       name,
       type,
-      balance,
+      // Decimal input (major units) -> integer minor units (paise).
+      balance: toMinorUnits(balance),
       currency,
       icon,
       color,
       isDefault,
-      lowBalanceThreshold,
+      lowBalanceThreshold: lowBalanceThreshold === null || lowBalanceThreshold === undefined
+        ? null
+        : toMinorUnits(lowBalanceThreshold),
       userId
     }
   });
+
+  return serializeAccount(created);
 };
 
 export const updateAccount = async (userId, accountId, data) => {
@@ -81,7 +99,7 @@ export const updateAccount = async (userId, accountId, data) => {
     });
   }
 
-  return prisma.account.update({
+  const updated = await prisma.account.update({
     where: { id: accountId },
     data: {
       name,
@@ -90,9 +108,15 @@ export const updateAccount = async (userId, accountId, data) => {
       color,
       isDefault,
       currency,
-      lowBalanceThreshold: lowBalanceThreshold === undefined ? account.lowBalanceThreshold : lowBalanceThreshold
+      lowBalanceThreshold: lowBalanceThreshold === undefined
+        ? account.lowBalanceThreshold
+        : lowBalanceThreshold === null || lowBalanceThreshold === undefined
+          ? null
+          : toMinorUnits(lowBalanceThreshold)
     }
   });
+
+  return serializeAccount(updated);
 };
 
 export const deleteAccount = async (userId, accountId) => {
@@ -134,7 +158,8 @@ export const getAccountBalance = async (userId, accountId) => {
     throw new AppError('Account not found', 404);
   }
   
-  return account.balance;
+  // Stored in minor units; return decimal for the caller.
+  return fromMinorUnits(account.balance);
 };
 
 export const updateAccountBalance = async (accountId, amountChange) => {

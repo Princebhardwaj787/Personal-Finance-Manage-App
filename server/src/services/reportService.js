@@ -1,6 +1,7 @@
 import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { round2 } from '../utils/goalCalculator.js';
+import { fromMinorUnits } from '../utils/money.js';
 import {
   enumerateBuckets,
   monthAtEnd,
@@ -333,23 +334,24 @@ const getAccountsReport = async (userId, query) => {
   const expenseByAccount = new Map();
   const countByAccount = new Map();
   for (const row of grouped) {
-    if (row.type === 'INCOME') incomeByAccount.set(row.accountId, round2(row._sum.amount ?? 0));
-    if (row.type === 'EXPENSE') expenseByAccount.set(row.accountId, round2(row._sum.amount ?? 0));
+    if (row.type === 'INCOME') incomeByAccount.set(row.accountId, fromMinorUnits(row._sum.amount ?? 0));
+    if (row.type === 'EXPENSE') expenseByAccount.set(row.accountId, fromMinorUnits(row._sum.amount ?? 0));
     countByAccount.set(row.accountId, (countByAccount.get(row.accountId) ?? 0) + row._count._all);
   }
-  const transferOutMap = new Map(transferOut.map((r) => [r.fromAccountId, round2(r._sum.amount ?? 0)]));
-  const transferInMap = new Map(transferIn.map((r) => [r.toAccountId, round2(r._sum.amount ?? 0)]));
+  const transferOutMap = new Map(transferOut.map((r) => [r.fromAccountId, fromMinorUnits(r._sum.amount ?? 0)]));
+  const transferInMap = new Map(transferIn.map((r) => [r.toAccountId, fromMinorUnits(r._sum.amount ?? 0)]));
 
   const rows = accounts.map((account) => ({
     id: account.id,
     name: account.name,
     type: account.type,
-    balance: account.balance,
-    income: incomeByAccount.get(account.id) ?? 0,
-    expenses: expenseByAccount.get(account.id) ?? 0,
+    // Stored in minor units; convert to decimal for the report.
+    balance: fromMinorUnits(account.balance),
+    income: fromMinorUnits(incomeByAccount.get(account.id) ?? 0),
+    expenses: fromMinorUnits(expenseByAccount.get(account.id) ?? 0),
     transactionCount: countByAccount.get(account.id) ?? 0,
-    transfersIn: transferInMap.get(account.id) ?? 0,
-    transfersOut: transferOutMap.get(account.id) ?? 0
+    transfersIn: fromMinorUnits(transferInMap.get(account.id) ?? 0),
+    transfersOut: fromMinorUnits(transferOutMap.get(account.id) ?? 0)
   }));
 
   const report = {

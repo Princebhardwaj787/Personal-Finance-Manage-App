@@ -9,6 +9,7 @@ import {
   calculateRemainingAmount,
   round2
 } from '../utils/goalCalculator.js';
+import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
 
 /** Fields the list/detail views actually render — keeps reads narrow. */
 const GOAL_SELECT = {
@@ -36,14 +37,16 @@ const assertPositive = (value, field) => {
   const num = Number(value);
   if (!Number.isFinite(num)) throw new AppError(`${field} must be a number`, 400);
   if (num <= 0) throw new AppError(`${field} must be greater than 0`, 400);
-  return num;
+  // Decimal input (major units) -> integer minor units (paise).
+  return toMinorUnits(num);
 };
 
 const assertNonNegative = (value, field) => {
   const num = Number(value);
   if (!Number.isFinite(num)) throw new AppError(`${field} must be a number`, 400);
   if (num < 0) throw new AppError(`${field} must not be negative`, 400);
-  return num;
+  // Decimal input (major units) -> integer minor units (paise).
+  return toMinorUnits(num);
 };
 
 const assertStatus = (value) => {
@@ -218,7 +221,7 @@ export const addContribution = async (userId, goalId, payload) => {
     const remaining = calculateRemainingAmount(goal);
     if (amount > remaining) {
       throw new AppError(
-        `Contribution exceeds the remaining amount (${round2(remaining)})`,
+        `Contribution exceeds the remaining amount (₹${fromMinorUnits(remaining)})`,
         400
       );
     }
@@ -245,7 +248,8 @@ export const addContribution = async (userId, goalId, payload) => {
         ...updated,
         _count: { contributions: (goal._count?.contributions ?? 0) + 1 }
       }),
-      contribution
+      // Contribution amount stored in minor units; convert to decimal for the client.
+      contribution: { ...contribution, amount: fromMinorUnits(contribution.amount) }
     };
   });
 };
@@ -270,7 +274,11 @@ export const listContributions = async (userId, goalId, { page = 1, limit = 10 }
   ]);
 
   return {
-    contributions,
+    contributions: contributions.map((c) => ({
+      ...c,
+      // Stored in minor units; convert to decimal for the client.
+      amount: fromMinorUnits(c.amount)
+    })),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -301,8 +309,9 @@ export const getSavingsSummary = async (userId) => {
     activeCount: counts[GOAL_STATUS.ACTIVE] ?? 0,
     completedCount: counts[GOAL_STATUS.COMPLETED] ?? 0,
     archivedCount: counts[GOAL_STATUS.ARCHIVED] ?? 0,
-    totalSaved: round2(totals._sum.currentAmount ?? 0),
-    totalTargets: round2(totals._sum.targetAmount ?? 0)
+    // Aggregates are in minor units; convert to decimal for the client.
+    totalSaved: fromMinorUnits(totals._sum.currentAmount ?? 0),
+    totalTargets: fromMinorUnits(totals._sum.targetAmount ?? 0)
   };
 };
 

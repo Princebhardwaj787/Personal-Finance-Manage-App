@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import { resolveRange, monthAtEnd, monthLabel } from '../utils/dateRange.js';
+import { fromMinorUnits } from '../utils/money.js';
 import { getBudgetOverview } from '../services/budgetService.js';
 import {
   getDashboardSummary,
@@ -102,7 +103,13 @@ export const getRecentTransactions = async (req, res, next) => {
       take: limit
     });
 
-    res.json({ transactions });
+    res.json({
+      // Amounts are stored in minor units; convert to decimal for the client.
+      transactions: transactions.map((txn) => ({
+        ...txn,
+        amount: fromMinorUnits(txn.amount)
+      }))
+    });
   } catch (error) {
     next(error);
   }

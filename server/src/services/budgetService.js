@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { monthRange, monthLabel } from '../utils/dateRange.js';
 import { round2 } from '../utils/goalCalculator.js';
+import { fromMinorUnits } from '../utils/money.js';
 
 /**
  * Single source of truth for budget maths.
@@ -30,14 +31,19 @@ export const resolveBudgetStatus = (
   return 'ON_TRACK';
 };
 
-/** Pure: derive every displayed number for one budget from two values. */
+/** Pure: derive every displayed number for one budget from two values.
+ *
+ * Inputs are expected in minor units (as stored in the DB). Returns decimal
+ * major units for API output. Percentage math is unit-agnostic so it is
+ * safe to convert to decimal first.
+ */
 export const computeBudgetStatus = (budgetAmount, spentAmount) => {
-  const safeBudget = Number(budgetAmount) || 0;
-  const spent = Number(spentAmount) || 0;
+  const safeBudget = fromMinorUnits(Number(budgetAmount) || 0);
+  const spent = fromMinorUnits(Number(spentAmount) || 0);
   const percentageUsed = safeBudget > 0 ? (spent / safeBudget) * 100 : 0;
 
   return {
-    budgetAmount: safeBudget,
+    budgetAmount: round2(safeBudget),
     spentAmount: round2(spent),
     remainingAmount: round2(safeBudget - spent),
     percentageUsed: Math.round(percentageUsed * 100) / 100,
@@ -56,7 +62,9 @@ const serializeCategory = (category) =>
 export const serializeBudget = (budget, status) => ({
   id: budget.id,
   category: serializeCategory(budget.category),
-  budgetAmount: budget.amount,
+  // Stored in minor units; convert to decimal for the client. (`status` also
+  // carries the computed decimal figure and is spread afterwards.)
+  budgetAmount: fromMinorUnits(budget.amount),
   ...status
 });
 

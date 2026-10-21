@@ -26,6 +26,7 @@ model User {
   reports       ReportHistory[]
   notifications Notification[]
   notificationPreference NotificationPreference?
+  auditEvents   AuditEvent[]
 }
 
 model Category {
@@ -49,14 +50,14 @@ model Account {
   id            String    @id @default(cuid())
   name          String
   type          String
-  balance       Float     @default(0)
+  balance       Int       @default(0) // stored in minor units (paise)
   currency      String    @default("INR")
   icon          String?
   color         String?
   isDefault     Boolean   @default(false)
-  /// Phase 9 — optional low-balance alert threshold for this account.
+  /// Phase 9 — optional low-balance alert threshold for this account (minor units).
   /// NULL means no low-balance monitoring for the account.
-  lowBalanceThreshold Float?
+  lowBalanceThreshold Int?
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
@@ -76,7 +77,7 @@ model Account {
 model Transaction {
   id          String           @id @default(cuid())
   type        String
-  amount      Float
+  amount      Int              // stored in minor units (paise)
   description String?
   /// Optional free-form note added by the user (Phase 7).
   notes       String?
@@ -112,8 +113,8 @@ model Transaction {
 model Budget {
   id        String   @id @default(cuid())
   name      String
-  amount    Float
-  spent     Float    @default(0)
+  amount    Int      // stored in minor units (paise)
+  spent     Int      @default(0) // stored in minor units (paise)
   month     Int
   year      Int
   userId    String
@@ -130,8 +131,8 @@ model SavingsGoal {
   id          String   @id @default(cuid())
   name        String
   description String?
-  targetAmount Float
-  currentAmount Float  @default(0)
+  targetAmount Int     // stored in minor units (paise)
+  currentAmount Int    @default(0) // stored in minor units (paise)
   targetDate  DateTime
   /// ACTIVE | COMPLETED | ARCHIVED (validated in the service layer)
   status      String   @default("ACTIVE")
@@ -150,7 +151,7 @@ model SavingsContribution {
   id        String   @id @default(cuid())
   goalId    String
   goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  amount    Float
+  amount    Int      // stored in minor units (paise)
   date      DateTime @default(now())
   note      String?
   createdAt DateTime @default(now())
@@ -160,7 +161,7 @@ model SavingsContribution {
 model RecurringExpense {
   id          String    @id @default(cuid())
   name        String
-  amount      Float
+  amount      Int       // stored in minor units (paise)
   /// WEEKLY | MONTHLY | QUARTERLY | YEARLY (validated in the service layer)
   frequency   String
   nextDueDate DateTime
@@ -190,7 +191,7 @@ model RecurringExpense {
 /// +amount) inside one database transaction together with this row.
 model Transfer {
   id            String   @id @default(cuid())
-  amount        Float
+  amount        Int      // stored in minor units (paise)
   date          DateTime @default(now())
   description   String?
   userId        String
@@ -299,4 +300,38 @@ model NotificationPreference {
   lowBalance         Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Phase 1 — audit trail for security-relevant and money-moving operations.
+///
+/// One row per notable event. `action` is a stable machine-readable string
+/// (e.g. AUTH_LOGIN_SUCCESS, TRANSACTION_CREATE) so the trail can be
+/// queried without parsing free text. `metadata` is a JSON string because
+/// SQLite has no native JSON type in Prisma.
+///
+/// Rows are never updated — only appended — so the trail is tamper-evident
+/// within the database (deletion still requires direct DB access).
+model AuditEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// AUTH_LOGIN_SUCCESS | AUTH_LOGIN_FAILURE | AUTH_LOGOUT | AUTH_PASSWORD_CHANGE |
+  /// ACCOUNT_CREATE | ACCOUNT_UPDATE | ACCOUNT_DELETE | TRANSACTION_CREATE |
+  /// TRANSACTION_UPDATE | TRANSACTION_DELETE | TRANSFER_CREATE | TRANSFER_UPDATE |
+  /// TRANSFER_DELETE | EXPORT_CSV | EXPORT_PDF
+  action    String
+  /// Outcome of the operation: SUCCESS | FAILURE
+  outcome   String   @default("SUCCESS")
+  /// Where the action came from: API | SCHEDULER | SYSTEM
+  source    String   @default("API")
+  /// The HTTP method + route (never the full URL with query values).
+  route     String?
+  /// IP address of the caller.
+  ip        String?
+  /// JSON string with action-specific, non-sensitive context.
+  metadata  String?
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
 }

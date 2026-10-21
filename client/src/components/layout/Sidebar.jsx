@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Button from '../forms/Button';
@@ -60,18 +61,69 @@ function NotificationsIcon({ className }) {
   return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
 }
 
-export default function Sidebar() {
+export default function Sidebar({ open = false, onClose }) {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const asideRef = useRef(null);
+  const [isDesktop, setIsDesktop] = useState(true);
+
+  // Track the breakpoint so the drawer state (open/closed, inert, aria-hidden)
+  // is only applied on small screens. On desktop the sidebar is always docked.
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktop(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  // Navigating away always closes the mobile drawer — otherwise it stays
+  // open over the page the user just selected.
+  useEffect(() => {
+    if (open && onClose) onClose();
+    // `location.pathname` is the trigger; `onClose` is intentionally omitted
+    // so a new inline callback identity does not re-run this on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  // On small screens the closed drawer must be removed from the tab order and
+  // the accessibility tree, not merely moved off-screen. `inert` is set on the
+  // DOM node directly because React 18 has no `inert` prop.
+  //
+  // On large screens the sidebar is permanently docked, so it must NEVER be
+  // made inert — otherwise the whole navigation becomes unusable on desktop.
+  useEffect(() => {
+    const node = asideRef.current;
+    if (!node) return;
+
+    if (isDesktop || open) {
+      node.removeAttribute('inert');
+    } else {
+      node.setAttribute('inert', '');
+    }
+  }, [open, isDesktop]);
+
+  const hiddenOnMobile = !isDesktop && !open;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0">
+    <aside
+      ref={asideRef}
+      className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0 lg:z-40 ${
+        open ? 'translate-x-0 shadow-xl' : '-translate-x-full'
+      }`}
+      aria-hidden={hiddenOnMobile ? 'true' : undefined}
+    >
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100">
           <Link to="/dashboard" className="text-xl font-bold text-primary-600">
             Finance
           </Link>
-          <button className="lg:hidden p-2 text-gray-400 hover:text-gray-600" aria-label="Close sidebar">
+          <button
+            type="button"
+            onClick={onClose}
+            className="lg:hidden p-2 text-gray-400 hover:text-gray-600"
+            aria-label="Close menu"
+          >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
