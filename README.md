@@ -4,14 +4,32 @@ A full-stack personal finance application: accounts, transactions, transfers,
 budgets, savings goals, recurring expenses, analytics, reports (CSV/PDF
 export) and notifications — built for real-world daily use.
 
-- **[AUDIT_REPORT.md](AUDIT_REPORT.md)** — Phase 1 audit: architecture,
-  findings, risks, phased roadmap.
-- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — deployment, rollback,
-  incident response, production-readiness checklist.
-- **[docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md)** — validated backup
-  and restore procedures.
-- [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) — the original
-  phase-by-phase plan.
+**It also runs as a native Android app** with every financial record stored
+on the device, working fully offline.
+
+## Documentation
+
+| Document | What it covers |
+|----------|----------------|
+| [AUDIT_REPORT.md](AUDIT_REPORT.md) | Repository audit: architecture, findings, risks, roadmap |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Web deployment, rollback, incident response, readiness checklist |
+| [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md) | Server-side backup/restore and recovery runbook |
+| [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md) | **Building, signing and installing the Android APK** |
+| [docs/ANDROID_TEST_REPORT.md](docs/ANDROID_TEST_REPORT.md) | **What was verified on a device, and what was not** |
+| [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md) | The original phase-by-phase plan |
+
+## The two builds
+
+|  | Web | Android |
+|---|---|---|
+| Data location | The server's SQLite database | **A SQLite database on the device** |
+| Network | Required | **Not required** |
+| Sign-in | Email + password | None (the device owner is the user) |
+| Backups | `npm run db:backup` | In-app export/import (versioned JSON) |
+
+Both share the **same** financial rules: the pure domain code lives in
+`shared/` and is imported by the server *and* the client, so the two can never
+disagree about a number.
 
 ## Tech Stack
 
@@ -19,26 +37,48 @@ export) and notifications — built for real-world daily use.
 |----------|------------|
 | Frontend | React 18, Vite 5, Tailwind CSS 3, Recharts, React Router 6, axios, date-fns |
 | Backend  | Node.js (ESM), Express 4, Prisma 5 + SQLite, JWT auth, express-validator, helmet, express-rate-limit, pdfkit, csv-stringify |
-| Tests    | Vitest — 39 automated tests against an **isolated** test database |
+| Android  | Capacitor 8, `@capacitor-community/sqlite`, AGP 8.13 / Gradle 8.14 / JDK 21 |
+| Tests    | Vitest — 39 server tests + 62 client tests |
 
 ## Project Structure
 
 ```
-client/              React SPA (Vite)
+shared/                Pure domain rules used by BOTH the server and the client
+  money.js               integer minor units (paise) <-> decimal
+  dateRange.js           the single UTC-calendar-day date strategy
+  goalCalculator.js      savings-goal status and progress
+  budgetCalculator.js    budget status and percentages
+  recurringCalculator.js recurrence maths
+  AppError.js            the shared error type
+
+client/              React SPA (Vite) + Capacitor
   src/
     components/      Reusable UI (dashboard charts, forms, layout, reports)
-    pages/           Route-level pages
     contexts/        AuthContext (useAuth) + AuthProvider
-    hooks/           Data hooks (useAccounts, useCategories, ...)
+    data/            ON-DEVICE storage (Android)
+      db.js            the Database port (execute / select / transaction)
+      schema.js        versioned DDL + migrations
+      adapters/        capacitorSqlite (device) · nodeSqlite (tests)
+      services/        accounts, categories, transactions, transfers, budgets,
+                       goals, recurring, analytics, reports, notifications
+      backup.js        versioned JSON export / validate / restore
+      store.js         wires the services onto one connection
+    pages/           Route-level pages
+    routes/          AppRoutes, ProtectedRoute
+    services/        API layer: HTTP (web) or local (Android)
+    utils/           format.js, period.js, constants.js
+  android/          The Capacitor Android project
+  assets/           Icon and splash source artwork
 server/              Express API
   prisma/            schema.prisma, migrations/, seed.js, dev.db (local)
-  scripts/           backup.js, restore.js (validated backup tooling)
+  scripts/           backup.js, restore.js, smoke.js
   src/
     routes/          13 route groups mounted under /api
     services/        Business logic (reports, analytics, notifications, ...)
     middleware/      Auth, validation, security (rate limit + headers), logging
-    utils/           Money (minor units), date-range and other helpers
+    utils/           re-exports of the shared domain rules
   tests/             Vitest suites: unit/, integration/, helpers/
+docs/               Deployment, backup/recovery and Android documentation
 test_*.js            Legacy regression scripts (see note below)
 ```
 
@@ -53,16 +93,45 @@ floating-point arithmetic is used for any authoritative calculation.
 | API request/response | decimal major units — `1000` in, `1000` out |
 | Service layer | integer minor units throughout (exact) |
 
-The conversion happens at the API boundary only, in
-`server/src/utils/money.js`. This is enforced by the test suite
-(`server/tests/unit/money.test.js`, `server/tests/integration/balance.test.js`,
-`server/tests/integration/api-money.test.js`).
+The conversion happens at the API boundary only, in `shared/money.js`. This is
+enforced by the test suite (`server/tests/unit/money.test.js`,
+`server/tests/integration/balance.test.js`,
+`server/tests/integration/api-money.test.js`,
+`client/src/data/schema.parity.test.js`).
 
 > **Migration note:** the schema previously used `Float`. Migration
-> `20261018233000_convert_monetary-columns-to-minor-units` converted every
+> `20261018233000_convert-monetary-columns-to-minor-units` converted every
 > stored value (×100) and changed the column types. A pre-migration backup of
 > the development database is kept at
 > `server/prisma/dev.db.pre-money-migration.bak`.
+
+## Building the Android app
+
+```bash
+cd client
+npm install
+
+# Build the web assets for Android (relative asset paths + the on-device
+# data source) and copy them into the Android project.
+CAPACITOR_ANDROID=true VITE_NATIVE_BUILD=true npm run build   # macOS/Linux
+npx cap sync android
+
+cd android
+# The Android Gradle Plugin needs JDK 17 or 21.
+JAVA_HOME="C:/Users/<you>/tools/jdk-21" ./gradlew.bat assembleDebug assembleRelease
+```
+
+| APK | Path |
+|-----|------|
+| Debug | `client/android/app/build/outputs/apk/debug/app-debug.apk` |
+| **Release (signed)** | `client/android/app/build/outputs/apk/release/app-release.apk` |
+
+Install it with `adb install -r <apk>` or by copying the file to the phone
+and opening it.
+
+Full instructions — JDK setup, release signing, installing, updating, and
+moving data between the web app and the phone — are in
+**[docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md)**.
 
 ## Getting Started
 
@@ -160,8 +229,8 @@ Amounts in requests and responses are decimal major units (e.g. `1000.50`).
 
 ## Tests
 
-The Vitest suite runs against an **isolated** `test.db` — it never touches
-`dev.db`. The database is recreated and migrated before each test file.
+**Server** — the Vitest suite runs against an **isolated** `test.db`; it never
+touches `dev.db`. The database is recreated and migrated before each file.
 
 ```bash
 cd server
@@ -175,6 +244,21 @@ create/update/delete/transfer/duplicate cycles, the API money contract,
 rounding, amount filters, user isolation, security headers, rate limiting,
 the audit trail and log redaction.
 
+**Client** — the on-device data layer is tested against a **real SQLite
+database** (Node's built-in `node:sqlite`), so the exact SQL that ships to
+the phone is exercised in CI.
+
+```bash
+cd client
+npm test               # 62 tests
+npm run lint
+```
+
+Suites cover the on-device schema (and its **parity** with the server's
+Prisma schema), the local services (accounts, categories, transactions,
+transfers, budgets, goals), the versioned backup format (export, validation,
+preview, restore, malformed input) and the money rules.
+
 > **Legacy note:** the 23 `test_*.js` scripts at the repository root hit a
 > live API against the *configured* database and create/delete records. They
 > are superseded by the Vitest suite. Use Vitest for anything automated.
@@ -187,11 +271,12 @@ npm test                # must exit 0
 npm run lint            # must exit 0
 
 cd ../client
+npm test                # must exit 0
 npm run lint            # ESLint, --max-warnings 0
 npm run build           # production build (vite build)
 ```
 
-All four must exit 0 before considering a change complete.
+All five must exit 0 before considering a change complete.
 
 ## Security
 
@@ -203,8 +288,23 @@ All four must exit 0 before considering a change complete.
   addresses are masked.
 - Append-only audit trail for logins and money-moving operations.
 
+**On Android** the app additionally:
+
+- Stores everything in the app's **private** storage (`/data/data/…`).
+- Disables Android cloud backup and device-to-device transfer
+  (`allowBackup="false"` + `data_extraction_rules.xml`), so financial records
+  are never copied by the system.
+- Refuses cleartext HTTP and hides the framework version.
+- Requests **no** storage, camera, contacts, location or microphone permission.
+- Ships `webContentsDebuggingEnabled: false` in release builds.
+
 ## Known limitations
 
-See [docs/DEPLOYMENT.md §10](docs/DEPLOYMENT.md) for the full list. In short:
-no business workspaces, no double-entry accounting, no payment gateway, no
-receipt storage, no automated or encrypted backups, and no CI workflow file yet.
+See [docs/DEPLOYMENT.md §10](docs/DEPLOYMENT.md) and
+[docs/ANDROID_BUILD.md §9](docs/ANDROID_BUILD.md) for the full lists.
+
+In short: no business workspaces, no double-entry accounting, no payment
+gateway, no receipt storage, no automated or encrypted backups, and no CI
+workflow file yet. On Android the database is **not** encrypted, there is no
+biometric app lock, recurring transactions are processed when the app opens
+rather than by a background job, and the screen is locked to portrait.

@@ -1,6 +1,17 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localBudgetApi } from './localApi';
 
-export const budgetApi = {
+/**
+ * Budget API.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
+ *
+ * The budget status rules come from `shared/budgetCalculator.js`, so the two
+ * platforms always agree.
+ */
+const httpBudgetApi = {
   async list(params = {}) {
     const query = new URLSearchParams(params).toString();
     const response = await api.get(`/budgets?${query}`);
@@ -36,5 +47,7 @@ export const budgetApi = {
     return response.data;
   }
 };
+
+export const budgetApi = isNativeBuild() ? localBudgetApi : httpBudgetApi;
 
 export default budgetApi;

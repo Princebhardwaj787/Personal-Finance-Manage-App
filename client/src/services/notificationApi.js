@@ -1,12 +1,17 @@
 import api, { buildQuery } from './api';
+import { isNativeBuild } from './platform';
+import { localNotificationApi } from './localApi';
 
 /**
- * Notification API (Phase 9).
+ * Notification API.
  *
  * All endpoints are scoped to the authenticated user by the server — the
- * client never sends a userId.
+ * client never sends a userId. On the device there is a single local user.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
  */
-export const notificationApi = {
+const httpNotificationApi = {
   /** Paginated list, newest first. */
   async list(params = {}) {
     const response = await api.get(`/notifications${buildQuery(params)}`);
@@ -55,3 +60,7 @@ export const notificationApi = {
     return response.data;
   }
 };
+
+export const notificationApi = isNativeBuild() ? localNotificationApi : httpNotificationApi;
+
+export default notificationApi;

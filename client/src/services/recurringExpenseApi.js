@@ -1,6 +1,17 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localRecurringExpenseApi } from './localApi';
 
-export const recurringExpenseApi = {
+/**
+ * Recurring expense API.
+ *
+ * The idempotency guarantee lives in the service, not in this caller: running
+ * the processor twice for the same date creates nothing the second time.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
+ */
+const httpRecurringExpenseApi = {
   async list(params = {}) {
     const query = new URLSearchParams(params).toString();
     const response = await api.get(`/recurring-expenses?${query}`);
@@ -8,10 +19,8 @@ export const recurringExpenseApi = {
   },
 
   /**
-   * Phase 7: ask the backend to generate every occurrence that is due as of
-   * `asOfDate` (body: { asOfDate?, maxCatchUp?, dryRun? }). Running this twice
-   * for the same date creates nothing the second time — idempotency lives in
-   * the service, not in this caller.
+   * Generate every occurrence that is due as of `asOfDate`
+   * (body: { asOfDate?, maxCatchUp?, dryRun? }).
    */
   async process(body = {}) {
     const response = await api.post('/recurring-expenses/process', body);
@@ -56,5 +65,9 @@ export const recurringExpenseApi = {
     return response.data;
   }
 };
+
+export const recurringExpenseApi = isNativeBuild()
+  ? localRecurringExpenseApi
+  : httpRecurringExpenseApi;
 
 export default recurringExpenseApi;

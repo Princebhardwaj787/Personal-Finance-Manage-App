@@ -1,6 +1,17 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localAccountApi } from './localApi';
 
-export const accountApi = {
+/**
+ * Account API.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: talks to the on-device SQLite database through the local adapter.
+ *
+ * Both paths return the same shapes, so every page and hook above this layer
+ * is identical in the web app and in the Android app.
+ */
+const httpAccountApi = {
   async list(params = {}) {
     const query = new URLSearchParams(params).toString();
     const response = await api.get(`/accounts?${query}`);
@@ -27,3 +38,7 @@ export const accountApi = {
     return response.data;
   }
 };
+
+export const accountApi = isNativeBuild() ? localAccountApi : httpAccountApi;
+
+export default accountApi;

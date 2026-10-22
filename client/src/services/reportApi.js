@@ -1,14 +1,20 @@
 import api, { buildQuery } from './api';
+import { isNativeBuild, isNativePlatform } from './platform';
+import { localReportApi } from './localApi';
+import { getStore, LOCAL_USER } from '../data/runtime.js';
+import { saveAndShare } from './fileExport';
 
 /**
- * Report API (Phase 8).
+ * Report API.
  *
- * JSON previews go through the normal axios instance. CSV/PDF downloads need
- * `responseType: 'blob'` because the token lives in localStorage — a plain
- * `<a href>` cannot send the Authorization header, so the file is fetched as
- * a blob and saved via an object URL.
+ * WEB: talks to the Express API; CSV/PDF are downloaded as blobs.
+ * ANDROID: builds the report from the on-device database and writes the file
+ *         into the app's private directory, then offers it through the system
+ *         share sheet.
+ *
+ * The JSON previews are identical on both paths.
  */
-export const reportApi = {
+const httpReportApi = {
   /** JSON report preview for one of the six report types. */
   async getReport(type, params = {}) {
     const response = await api.get(`/reports/${type}${buildQuery(params)}`);
@@ -46,3 +52,45 @@ export const reportApi = {
     return filename;
   }
 };
+
+/**
+ * Native report download: build the file on the device and hand it to the
+ * user through the system share sheet.
+ */
+const nativeReportApi = {
+  ...localReportApi,
+
+  async download(type, format, params = {}) {
+    const { store } = await getStore();
+
+    let filename;
+    let data;
+
+    if (format === 'csv') {
+      const result = await store.reports.exportCsv(LOCAL_USER, type, params);
+      filename = result.filename;
+      data = result.text;
+    } else if (format === 'pdf') {
+      const result = await store.reports.exportPdf(LOCAL_USER, type, params);
+      filename = result.filename;
+      data = result.bytes;
+    } else {
+      throw new Error(`Unsupported export format: ${format}`);
+    }
+
+    await store.reports.recordReportHistory(LOCAL_USER, {
+      type,
+      format,
+      startDate: params.startDate ?? '',
+      endDate: params.endDate ?? ''
+    });
+
+    await saveAndShare(filename, data, `${type} report`);
+    return filename;
+  }
+};
+
+export const reportApi = isNativeBuild() ? nativeReportApi : httpReportApi;
+
+export { isNativePlatform };
+export default reportApi;

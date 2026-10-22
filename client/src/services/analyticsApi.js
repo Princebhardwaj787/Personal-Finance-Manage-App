@@ -1,15 +1,20 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localAnalyticsApi } from './localApi';
 
 /**
- * Analytics endpoints (§15). Each response is already aggregated by the
+ * Analytics endpoints. Each response is already aggregated by the
  * database, so these payloads stay small no matter how much history exists.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads the on-device SQLite database.
  */
-export const analyticsApi = {
+const httpAnalyticsApi = {
   incomeExpenses(params = {}) {
     return api.get('/analytics/income-expenses', { params }).then((response) => response.data);
   },
 
-  /** Serves both the category chart (§7) and the top-categories list (§8). */
+  /** Serves both the category chart and the top-categories list. */
   categorySpending(params = {}) {
     return api.get('/analytics/category-spending', { params }).then((response) => response.data);
   },
@@ -18,5 +23,7 @@ export const analyticsApi = {
     return api.get('/analytics/monthly-trends', { params: { months } }).then((response) => response.data);
   }
 };
+
+export const analyticsApi = isNativeBuild() ? localAnalyticsApi : httpAnalyticsApi;
 
 export default analyticsApi;

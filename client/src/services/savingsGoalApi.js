@@ -1,6 +1,14 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localSavingsGoalApi } from './localApi';
 
-export const savingsGoalApi = {
+/**
+ * Savings goal API.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
+ */
+const httpSavingsGoalApi = {
   async list(params = {}) {
     const query = new URLSearchParams(params).toString();
     const response = await api.get(`/savings-goals?${query}`);
@@ -43,5 +51,7 @@ export const savingsGoalApi = {
     return response.data;
   }
 };
+
+export const savingsGoalApi = isNativeBuild() ? localSavingsGoalApi : httpSavingsGoalApi;
 
 export default savingsGoalApi;

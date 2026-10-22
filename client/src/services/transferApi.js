@@ -1,16 +1,18 @@
 import api, { buildQuery } from './api';
+import { isNativeBuild } from './platform';
+import { localTransferApi } from './localApi';
 
 /**
- * Transfer API (Phase 7 §B).
+ * Transfer API.
  *
  * Transfers move money between two of the user's own accounts and are stored
- * in their own table — they never become income or expense rows, so net worth
- * cannot change when money moves between your own accounts.
+ * in their own table — they never become income or expense rows, so net
+ * worth cannot change when money moves between your own accounts.
  *
- * The parameter shape mirrors `transactionApi.list` so both list screens feel
- * identical (and a future export can reuse it).
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
  */
-export const transferApi = {
+const httpTransferApi = {
   async list(params = {}) {
     const response = await api.get(`/transfers${buildQuery(params)}`);
     return response.data;
@@ -41,5 +43,7 @@ export const transferApi = {
     return response.data;
   }
 };
+
+export const transferApi = isNativeBuild() ? localTransferApi : httpTransferApi;
 
 export default transferApi;

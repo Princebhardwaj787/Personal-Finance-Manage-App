@@ -1,16 +1,9 @@
 /**
- * Sort whitelists shared by every list endpoint.
+ * Re-export of the shared domain module.
  *
- * User input is NEVER interpolated into an order-by: only fields that appear
- * in `allowed` are used, everything else falls back to `fallback`. A stable
- * `id` tiebreaker keeps pagination from repeating/skipping rows when the sort
- * column has duplicates.
+ * The canonical implementation lives in <repo>/shared/sortOrder.js so the
+ * Android client and the Express server share ONE copy of the financial
+ * rules. This file keeps the server's existing import paths working
+ * (../utils/sortOrder.js) so no service, controller or route has to change.
  */
-export const SORT_ORDERS = Object.freeze(['asc', 'desc']);
-
-export const buildOrderBy = ({ sortBy, sortOrder, allowed = [], fallback = 'date' }) => {
-  const field = Array.isArray(allowed) && allowed.includes(sortBy) ? sortBy : fallback;
-  const requested = String(sortOrder ?? '').toLowerCase();
-  const direction = SORT_ORDERS.includes(requested) ? requested : 'desc';
-  return [{ [field]: direction }, { id: direction }];
-};
+export * from '../../../shared/sortOrder.js';

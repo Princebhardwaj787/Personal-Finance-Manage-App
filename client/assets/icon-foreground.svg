@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    App icon — adaptive foreground.
+
+    Only the mark, on a transparent background. The launcher supplies the
+    background colour (#16a34a). The mark stays inside the 66% safe zone so
+    no launcher mask can clip it.
+  -->
+  <g fill="none" stroke="#ffffff" stroke-width="58" stroke-linecap="round">
+    <path d="M300 380h424"/>
+    <path d="M300 512h300"/>
+    <path d="M300 644h200"/>
+  </g>
+  <circle cx="760" cy="644" r="46" fill="#ffffff"/>
+</svg>

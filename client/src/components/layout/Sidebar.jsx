@@ -17,6 +17,14 @@ const navigation = [
   { name: 'Notifications', href: '/notifications', icon: NotificationsIcon },
 ];
 
+/**
+ * Shown only in the Android app, where the records live on the device and
+ * the user controls the backup themselves.
+ */
+const nativeNavigation = [
+  { name: 'Backup & Restore', href: '/settings/backup', icon: BackupIcon },
+];
+
 function TransactionsIcon({ className }) {
   return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>;
 }
@@ -61,9 +69,13 @@ function NotificationsIcon({ className }) {
   return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>;
 }
 
+function BackupIcon({ className }) {
+  return <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-5 4l5-4m0 0l-5 4m5-4v12" /></svg>;
+}
+
 export default function Sidebar({ open = false, onClose }) {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isNative } = useAuth();
   const asideRef = useRef(null);
   const [isDesktop, setIsDesktop] = useState(true);
 
@@ -108,7 +120,7 @@ export default function Sidebar({ open = false, onClose }) {
   return (
     <aside
       ref={asideRef}
-      className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0 lg:z-40 ${
+      className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 lg:translate-x-0 lg:z-40 safe-area-top safe-area-bottom ${
         open ? 'translate-x-0 shadow-xl' : '-translate-x-full'
       }`}
       aria-hidden={hiddenOnMobile ? 'true' : undefined}
@@ -132,7 +144,7 @@ export default function Sidebar({ open = false, onClose }) {
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Main navigation">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href || 
+            const isActive = location.pathname === item.href ||
               (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
             return (
               <Link
@@ -149,6 +161,31 @@ export default function Sidebar({ open = false, onClose }) {
               </Link>
             );
           })}
+
+          {isNative && (
+            <>
+              <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Data
+              </div>
+              {nativeNavigation.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                      isActive
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5 mr-3 flex-shrink-0" aria-hidden="true" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-100">

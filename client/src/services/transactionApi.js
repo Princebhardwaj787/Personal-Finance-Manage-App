@@ -1,14 +1,16 @@
 import api, { buildQuery } from './api';
+import { isNativeBuild } from './platform';
+import { localTransactionApi } from './localApi';
 
 /**
- * Transaction query layer (Phase 7).
+ * Transaction API.
  *
- * `list(params)` is the single reusable entry point: filters, search, sort and
- * paging all travel to the server, where they are validated against a
- * whitelist and executed in SQL. A future CSV export reuses exactly the same
- * parameter shape — only the endpoint changes.
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
+ *
+ * Filtering, searching, sorting and paging are done in SQL on both paths.
  */
-export const transactionApi = {
+const httpTransactionApi = {
   async list(params = {}) {
     const response = await api.get(`/transactions${buildQuery(params)}`);
     return response.data;
@@ -63,3 +65,7 @@ export const transactionApi = {
     return response.data;
   }
 };
+
+export const transactionApi = isNativeBuild() ? localTransactionApi : httpTransactionApi;
+
+export default transactionApi;

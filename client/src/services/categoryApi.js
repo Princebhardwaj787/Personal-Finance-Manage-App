@@ -1,6 +1,14 @@
 import api from './api';
+import { isNativeBuild } from './platform';
+import { localCategoryApi } from './localApi';
 
-export const categoryApi = {
+/**
+ * Category API.
+ *
+ * WEB: talks to the Express API.
+ * ANDROID: reads and writes the on-device SQLite database.
+ */
+const httpCategoryApi = {
   async list(params = {}) {
     const query = new URLSearchParams(params).toString();
     const response = await api.get(`/categories?${query}`);
@@ -32,3 +40,7 @@ export const categoryApi = {
     return response.data;
   }
 };
+
+export const categoryApi = isNativeBuild() ? localCategoryApi : httpCategoryApi;
+
+export default categoryApi;

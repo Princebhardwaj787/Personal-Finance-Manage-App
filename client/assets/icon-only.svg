@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    App icon — full bleed.
+
+    A green rounded square carrying the same "ledger lines" mark as the web
+    favicon, so the launcher icon and the browser tab stay recognisably the
+    same product. The mark is centred in the adaptive-icon safe zone.
+  -->
+  <rect width="1024" height="1024" rx="228" fill="#16a34a"/>
+  <g fill="none" stroke="#ffffff" stroke-width="58" stroke-linecap="round">
+    <path d="M300 380h424"/>
+    <path d="M300 512h300"/>
+    <path d="M300 644h200"/>
+  </g>
+  <circle cx="760" cy="644" r="46" fill="#ffffff"/>
+</svg>

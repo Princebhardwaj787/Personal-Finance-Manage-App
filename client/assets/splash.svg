@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732" width="2732" height="2732">
+  <!--
+    Splash screen.
+
+    A white background with the app mark centred. The mark is drawn at the
+    size it should appear on the device so the launch image and the first
+    painted frame match.
+  -->
+  <rect width="2732" height="2732" fill="#ffffff"/>
+  <g transform="translate(854,854) scale(1)">
+    <rect x="0" y="0" width="1024" height="1024" rx="228" fill="#16a34a"/>
+    <g fill="none" stroke="#ffffff" stroke-width="58" stroke-linecap="round">
+      <path d="M300 380h424"/>
+      <path d="M300 512h300"/>
+      <path d="M300 644h200"/>
+    </g>
+    <circle cx="760" cy="644" r="46" fill="#ffffff"/>
+  </g>
+</svg>

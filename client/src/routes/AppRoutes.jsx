@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import ProtectedRoute from './ProtectedRoute';
 import Layout from '../components/layout/Layout';
 import Login from '../pages/Login';
@@ -15,13 +16,39 @@ import Transfers from '../pages/Transfers';
 import Reports from '../pages/Reports';
 import Notifications from '../pages/Notifications';
 import NotificationSettings from '../pages/settings/NotificationSettings';
+import BackupSettings from '../pages/settings/BackupSettings';
+
+/**
+ * On the ANDROID build there is no server and no account, so the sign-in
+ * screens do not apply — the app opens straight into the dashboard. The
+ * routes are kept (so a shared link still resolves) but they redirect.
+ */
+function NativeRedirect({ children }) {
+  const { isNative } = useAuth();
+  if (isNative) return <Navigate to="/dashboard" replace />;
+  return children;
+}
 
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      
+      <Route
+        path="/login"
+        element={
+          <NativeRedirect>
+            <Login />
+          </NativeRedirect>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <NativeRedirect>
+            <Register />
+          </NativeRedirect>
+        }
+      />
+
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -33,6 +60,7 @@ export default function AppRoutes() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/settings/notifications" element={<NotificationSettings />} />
+        <Route path="/settings/backup" element={<BackupSettings />} />
         {/* Income / Expenses are transaction views filtered by type. */}
         <Route path="/income" element={<Navigate to="/transactions?type=INCOME" replace />} />
         <Route path="/expenses" element={<Navigate to="/transactions?type=EXPENSE" replace />} />

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { addBackHandler } from '../../services/nativeRuntime';
 
 export default function Modal({
   isOpen,
@@ -26,6 +27,17 @@ export default function Modal({
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
     };
+  }, [isOpen, onClose]);
+
+  /**
+   * On Android the hardware back button must close the topmost dialog
+   * instead of navigating the app. The handler is a no-op in the web build.
+   */
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    return addBackHandler(() => {
+      onClose();
+    });
   }, [isOpen, onClose]);
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import Input from '../components/forms/Input';
 import Button from '../components/forms/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
+import { formatMoney } from '../utils/format';
 
 const ACCOUNT_TYPES = [
   { value: 'CASH', label: 'Cash', icon: '💵' },
@@ -13,14 +14,9 @@ const ACCOUNT_TYPES = [
   { value: 'OTHER', label: 'Other', icon: '📦' }
 ];
 
-const formatCurrency = (amount, currency = 'INR') => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount || 0);
-};
+// Amounts with paise are shown with two decimals — rounding a balance to the
+// nearest rupee would misstate it.
+const formatCurrency = (amount, currency = 'INR') => formatMoney(amount, currency);
 
 export default function Accounts() {
   const { accounts, loading, createAccount, updateAccount, deleteAccount } = useAccounts();

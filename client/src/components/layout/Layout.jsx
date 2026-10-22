@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { addBackHandler } from '../../services/nativeRuntime';
 
 /**
  * APP LAYOUT
@@ -13,6 +14,7 @@ import Header from './Header';
  *   - the overlay being tapped,
  *   - the sidebar's close button,
  *   - the Escape key,
+ *   - the Android hardware back button,
  *   - navigating to another page (handled inside Sidebar).
  */
 export default function Layout() {
@@ -30,6 +32,14 @@ export default function Layout() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen, closeSidebar]);
+
+  // The Android back button closes the drawer before it navigates.
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    return addBackHandler(() => {
+      closeSidebar();
+    });
   }, [sidebarOpen, closeSidebar]);
 
   // Prevent the page behind the drawer from scrolling on small screens.
@@ -50,7 +60,8 @@ export default function Layout() {
       <div className="transition-[padding] duration-200 lg:pl-64">
         <Header onMenuClick={toggleSidebar} />
 
-        <main className="p-4 sm:p-6 lg:p-8">
+        {/* The bottom safe-area keeps content clear of the gesture bar. */}
+        <main className="p-4 sm:p-6 lg:p-8 safe-area-bottom">
           <Outlet />
         </main>
       </div>

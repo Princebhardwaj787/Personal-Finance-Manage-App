@@ -3,6 +3,19 @@ import { AppError } from '../middleware/errorHandler.js';
 import { monthRange, monthLabel } from '../utils/dateRange.js';
 import { round2 } from '../utils/goalCalculator.js';
 import { fromMinorUnits } from '../utils/money.js';
+import {
+  BUDGET_STATUS_THRESHOLDS,
+  resolveBudgetStatus,
+  computeBudgetStatus
+} from '../../../shared/budgetCalculator.js';
+
+/**
+ * The budget status rules live in `shared/budgetCalculator.js` so the
+ * Express server and the Android client compute identical numbers. They are
+ * re-exported here because the server's existing imports reference them from
+ * this module.
+ */
+export { BUDGET_STATUS_THRESHOLDS, resolveBudgetStatus, computeBudgetStatus };
 
 /**
  * Single source of truth for budget maths.
@@ -12,44 +25,9 @@ import { fromMinorUnits } from '../utils/money.js';
  * re-implemented them (spec §10: "Do not duplicate budget logic"). Everything
  * that needs a budget number now goes through this service.
  *
- * Status semantics are unchanged from Phase 4:
- *   ON_TRACK  < 80%   |   WARNING  < 100%   |   EXCEEDED >= 100%
+ * The rules themselves now live in `shared/budgetCalculator.js` so the
+ * Android client computes exactly the same numbers.
  */
-export const BUDGET_STATUS_THRESHOLDS = {
-  ON_TRACK: 79.99,
-  WARNING: 99.99,
-  EXCEEDED: 100
-};
-
-/** Pure: percentage -> status. Used for per-budget AND overall totals. */
-export const resolveBudgetStatus = (
-  percentageUsed,
-  thresholds = BUDGET_STATUS_THRESHOLDS
-) => {
-  if (percentageUsed >= thresholds.EXCEEDED) return 'EXCEEDED';
-  if (percentageUsed >= thresholds.WARNING) return 'WARNING';
-  return 'ON_TRACK';
-};
-
-/** Pure: derive every displayed number for one budget from two values.
- *
- * Inputs are expected in minor units (as stored in the DB). Returns decimal
- * major units for API output. Percentage math is unit-agnostic so it is
- * safe to convert to decimal first.
- */
-export const computeBudgetStatus = (budgetAmount, spentAmount) => {
-  const safeBudget = fromMinorUnits(Number(budgetAmount) || 0);
-  const spent = fromMinorUnits(Number(spentAmount) || 0);
-  const percentageUsed = safeBudget > 0 ? (spent / safeBudget) * 100 : 0;
-
-  return {
-    budgetAmount: round2(safeBudget),
-    spentAmount: round2(spent),
-    remainingAmount: round2(safeBudget - spent),
-    percentageUsed: Math.round(percentageUsed * 100) / 100,
-    status: resolveBudgetStatus(percentageUsed)
-  };
-};
 
 export const CATEGORY_SELECT = { id: true, name: true, type: true, icon: true, color: true };
 

@@ -1,3 +1,10 @@
+/* Inter is bundled locally (not loaded from a CDN) so the Android app works
+   completely offline and never makes a network request for its own UI. */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -68,6 +75,35 @@
 }
 
 @layer utilities {
+  /*
+    Safe-area insets (Android conversion — Phase E).
+
+    The app draws behind the status bar and the navigation bar, and handles
+    display cutouts (notch / punch hole). `env(safe-area-inset-*)` resolves to
+    the real inset on Android; on a desktop browser it resolves to 0, so the
+    same styles work in both places.
+  */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* The bottom of a scrollable page must clear the gesture/navigation bar. */
+  .safe-area-bottom-margin {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: theme('colors.gray.300') transparent;

@@ -1,4 +1,13 @@
 import { logger } from '../utils/logger.js';
+import { AppError } from '../../../shared/AppError.js';
+
+/**
+ * The canonical `AppError` lives in `shared/` because the shared date-range
+ * rules throw it and those rules are also bundled into the Android client.
+ * It is re-exported here so every existing
+ * `import { AppError } from '../middleware/errorHandler.js'` keeps working.
+ */
+export { AppError };
 
 export const errorHandler = (err, req, res, _next) => {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -64,14 +73,6 @@ export const errorHandler = (err, req, res, _next) => {
     ...(!isProduction && err.stack ? { stack: err.stack } : {})
   });
 };
-
-export class AppError extends Error {
-  constructor(message, statusCode = 500) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = 'AppError';
-  }
-}
 
 export const notFound = (req, res) => {
   res.status(404).json({ error: 'Route not found' });
