@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Personal Finance Management App
 
 A full-stack personal finance application: accounts, transactions, transfers,
@@ -308,3 +309,6 @@ gateway, no receipt storage, no automated or encrypted backups, and no CI
 workflow file yet. On Android the database is **not** encrypted, there is no
 biometric app lock, recurring transactions are processed when the app opens
 rather than by a background job, and the screen is locked to portrait.
+=======
+# Personal-Finance-Manage-App
+>>>>>>> 9ecadbc0b6f01560755bde20418b8459087999fd
