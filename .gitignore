@@ -1,11 +1,15 @@
 # Dependencies
 node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
 
 # Build output
 dist/
 build/
+.coverage
 
-# Environment files — never commit secrets (.env.example is kept)
+# Environment files – never commit secrets (.env.example is kept)
 .env
 .env.local
 .env.*.local
@@ -18,11 +22,9 @@ build/
 *.db-wal
 *.bak
 *.restoring
-# Database backups (create with `npm run db:backup`)
 server/prisma/backups/
 server/prisma/roundtrip-backups/
 server/prisma/*.pre-restore.db
-# Test database
 server/test.db
 
 # Freebuff workspace metadata
@@ -31,9 +33,36 @@ server/test.db
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 
 # Editor / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# TypeScript / Language Server
+*.tsbuildinfo
+.tspartcache/
+.turbopack/
+
+# Test artifacts and reports
+coverage/
+*.prof
+*.lcov
+
+# Prisma generated files
+./prisma/migrations/
+
+# Client/output folders (if applicable)
+client/dist/
+client/build/
+
+# Runtime storage (if using upload/attachment features)
+server/uploads/
+server/storage/
+
+# Temporary files
+temp/
+tmp/
