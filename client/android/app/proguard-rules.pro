@@ -19,3 +19,22 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ------------------------------------------------------------------
+# Capacitor / Capacitor-community plugins (Android conversion).
+# Keep the plugin classes and their JavaScript interface so the WebView
+# can call into native code after R8 shrinking/obfuscation.
+# ------------------------------------------------------------------
+-keep class com.getcapacitor.** { *; }
+-keep class com.getcapacitor.community.sqlite.** { *; }
+-keep interface com.getcapacitor.** { *; }
+-keepclassmembers class * extends com.getcapacitor.Plugin {
+    public *;
+}
+-keep class com.capawesome.capacitor.filepicker.** { *; }
+
+# Keep WebView-related classes used by Capacitor.
+-keep class android.webkit.** { *; }
+
+# Keep the MainActivity entry point.
+-keep class com.mohit.finance.MainActivity { *; }

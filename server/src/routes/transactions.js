@@ -16,8 +16,12 @@ router.use(authenticate);
  * key and uses '' for "not set" (e.g. `?type=&startDate=`), which must be
  * treated as an absent filter rather than a validation error.
  */
-const transactionTypes = ['INCOME', 'EXPENSE'];
-const typeMessage = 'type must be INCOME or EXPENSE (transfers are created via /api/transfers)';
+const transactionTypes = [
+  'INCOME', 'EXPENSE', 'REFUND', 'CASH_WITHDRAWAL', 'CASH_DEPOSIT',
+  'LOAN_DISBURSED', 'LOAN_REPAYMENT', 'LOAN_COLLECTION',
+  'INVESTMENT_PURCHASE', 'INVESTMENT_SALE', 'ADJUSTMENT'
+];
+const typeMessage = 'type must be one of: INCOME, EXPENSE, REFUND, CASH_WITHDRAWAL, CASH_DEPOSIT, LOAN_DISBURSED, LOAN_REPAYMENT, LOAN_COLLECTION, INVESTMENT_PURCHASE, INVESTMENT_SALE, ADJUSTMENT';
 
 const idParam = param('id').isString().notEmpty().withMessage('Transaction ID is required');
 
@@ -34,7 +38,13 @@ const amountRangeRules = [
 const textRules = [
   body('description').optional({ values: 'null' }).trim().isLength({ max: 500 }).withMessage('Description too long'),
   body('notes').optional({ values: 'null' }).trim().isLength({ max: 2000 }).withMessage('Notes too long (max 2000)'),
-  body('reference').optional({ values: 'null' }).trim().isLength({ max: 100 }).withMessage('Reference too long (max 100)')
+  body('reference').optional({ values: 'null' }).trim().isLength({ max: 100 }).withMessage('Reference too long (max 100)'),
+  body('paymentMethod').optional({ values: 'null' }).trim().isIn(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'WALLET', 'OTHER']).withMessage('Invalid payment method'),
+  body('merchant').optional({ values: 'null' }).trim().isLength({ max: 200 }).withMessage('Merchant too long (max 200)'),
+  body('tags').optional({ values: 'null' }).trim().isLength({ max: 200 }).withMessage('Tags too long (max 200)'),
+  body('subcategory').optional({ values: 'null' }).trim().isLength({ max: 100 }).withMessage('Subcategory too long (max 100)'),
+  body('attachmentUrl').optional({ values: 'null' }).trim().isLength({ max: 500 }).withMessage('Attachment URL too long (max 500)'),
+  body('isRecurring').optional({ values: 'falsy' }).isBoolean().withMessage('isRecurring must be a boolean')
 ];
 
 // Static paths first so they are never shadowed by '/:id'.
@@ -42,6 +52,8 @@ router.get('/', [
   query('page').optional({ values: 'falsy' }).isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional({ values: 'falsy' }).isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
   query('type').optional({ values: 'falsy' }).isIn(transactionTypes).withMessage(typeMessage),
+  query('paymentMethod').optional({ values: 'falsy' }).isIn(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'WALLET', 'OTHER']).withMessage('Invalid payment method'),
+  query('merchant').optional({ values: 'falsy' }).trim().isLength({ max: 200 }).withMessage('Merchant must be 200 characters or fewer'),
   query('accountId').optional({ values: 'falsy' }).isString().withMessage('Invalid account ID'),
   query('categoryId').optional({ values: 'falsy' }).isString().withMessage('Invalid category ID'),
   ...dateRangeRules,

@@ -2,6 +2,17 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sharedAlias, isAndroidBuild } from './alias.config.js';
 
+/** Large third-party libraries split into their own chunks so the Android
+ *  WebView parses less JavaScript up front on every route change. */
+const VENDOR_GROUPS = {
+  react: ['react', 'react-dom', 'scheduler'],
+  router: ['react-router-dom'],
+  http: ['axios'],
+  dates: ['date-fns'],
+  charts: ['recharts', 'd3-', 'react-is'],
+  capacitor: ['@capacitor', '@capawesome'],
+};
+
 export default defineConfig(({ mode }) => {
   const android = isAndroidBuild(mode);
 
@@ -36,7 +47,29 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       // The Android WebView on older devices is slow with modern JS.
       target: android ? 'es2019' : 'es2020',
-      sourcemap: !android
+      sourcemap: !android,
+      // Warn when any single chunk exceeds 400 kB after minification.
+      chunkSizeWarningLimit: 400,
+      rollupOptions: {
+        output: {
+          // Split vendor code into its own chunks so the app's own code can be
+          // cached independently and the initial parse on a slow WebView is
+          // smaller.
+          manualChunks: (id) => {
+            if (!id.includes('node_modules')) return null;
+
+            for (const [group, patterns] of Object.entries(VENDOR_GROUPS)) {
+              if (patterns.some((p) => id.includes(p))) return `vendor-${group}`;
+            }
+            // Everything else that doesn't match a named group goes here.
+            return 'vendor-base';
+          },
+          // Deterministic chunk names so browser caching works across builds.
+          entryFileNames: `assets/[name]-[hash].js`,
+          chunkFileNames: `assets/[name]-[hash].js`,
+          assetFileNames: `assets/[name]-[hash].[ext]`
+        }
+      }
     }
   };
 });

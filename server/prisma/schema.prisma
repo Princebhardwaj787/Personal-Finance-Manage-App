@@ -8,99 +8,128 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  name          String?
-  avatar        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  transactions  Transaction[]
-  categories    Category[]
-  budgets       Budget[]
-  savingsGoals  SavingsGoal[]
-  recurringExpenses RecurringExpense[]
-  transfers     Transfer[]
-  recurringOccurrences RecurringOccurrence[]
-  reports       ReportHistory[]
-  notifications Notification[]
+  id                     String                  @id @default(cuid())
+  email                  String                  @unique
+  passwordHash           String
+  name                   String?
+  avatar                 String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  accounts               Account[]
+  transactions           Transaction[]
+  categories             Category[]
+  budgets                Budget[]
+  savingsGoals           SavingsGoal[]
+  recurringExpenses      RecurringExpense[]
+  transfers              Transfer[]
+  recurringOccurrences   RecurringOccurrence[]
+  reports                ReportHistory[]
+  notifications          Notification[]
   notificationPreference NotificationPreference?
-  auditEvents   AuditEvent[]
+  auditEvents            AuditEvent[]
+  /// Phase 10
+  debts                  Debt[]
+  debtPayments           DebtPayment[]
+  investments            Investment[]
+  investmentTransactions InvestmentTransaction[]
+  documents              Document[]
 }
 
 model Category {
-  id          String   @id @default(cuid())
-  name        String
-  type        String
-  icon        String?
-  color       String?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  budgets     Budget[]
+  id                String             @id @default(cuid())
+  name              String
+  type              String
+  icon              String?
+  color             String?
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions      Transaction[]
+  budgets           Budget[]
   recurringExpenses RecurringExpense[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
   @@unique([name, userId, type])
   @@index([userId, type])
 }
 
 model Account {
-  id            String    @id @default(cuid())
-  name          String
-  type          String
-  balance       Int       @default(0) // stored in minor units (paise)
-  currency      String    @default("INR")
-  icon          String?
-  color         String?
-  isDefault     Boolean   @default(false)
+  id                   String             @id @default(cuid())
+  name                 String
+  type                 String
+  balance              Int                @default(0) // stored in minor units (paise)
+  currency             String             @default("INR")
+  icon                 String?
+  color                String?
+  isDefault            Boolean            @default(false)
   /// Phase 9 — optional low-balance alert threshold for this account (minor units).
   /// NULL means no low-balance monitoring for the account.
-  lowBalanceThreshold Int?
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions  Transaction[]
-  recurringExpenses RecurringExpense[]
-  savingsGoals  SavingsGoal[]
-  transfersFrom Transfer[] @relation("TransferFrom")
-  transfersTo   Transfer[] @relation("TransferTo")
+  lowBalanceThreshold  Int?
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         Transaction[]
+  recurringExpenses    RecurringExpense[]
+  savingsGoals         SavingsGoal[]
+  /// Phase 10
+  debts                Debt[]
+  investments          Investment[]
+  transfersFrom        Transfer[]         @relation("TransferFrom")
+  transfersTo          Transfer[]         @relation("TransferTo")
   /// Legacy Phase 1-2 transfer counterpart column. Kept in the schema (and in
   /// the database) so SQLite never has to drop a foreign-key column; Phase 7
   /// writes transfers to the Transfer table instead and never sets this field.
-  transferTransactions Transaction[] @relation("TransferAccount")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  transferTransactions Transaction[]      @relation("TransferAccount")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
   @@index([userId])
 }
 
 model Transaction {
-  id          String           @id @default(cuid())
-  type        String
-  amount      Int              // stored in minor units (paise)
-  description String?
+  id                 String               @id @default(cuid())
+  /// INCOME | EXPENSE | REFUND | CASH_WITHDRAWAL | CASH_DEPOSIT |
+  /// LOAN_DISBURSED | LOAN_REPAYMENT | LOAN_COLLECTION |
+  /// INVESTMENT_PURCHASE | INVESTMENT_SALE | ADJUSTMENT
+  type               String
+  amount             Int // stored in minor units (paise)
+  description        String?
   /// Optional free-form note added by the user (Phase 7).
-  notes       String?
+  notes              String?
   /// Optional human-readable reference (invoice no., UTR, cheque no.).
   /// Never an internal database id.
-  reference   String?
-  date        DateTime         @default(now())
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountId   String
-  account     Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  categoryId  String?
-  category    Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  reference          String?
+  /// CASH | UPI | CARD | BANK_TRANSFER | WALLET | OTHER
+  paymentMethod      String?
+  /// Merchant, payee or payer name.
+  merchant           String?
+  /// Comma-separated user tags (e.g. "tax-deductible,business").
+  tags               String?
+  /// Sub-category within a category (e.g. "Groceries" under "Food & Dining").
+  subcategory        String?
+  /// Path to an attached receipt/document (local-first storage).
+  attachmentUrl      String?
+  /// True when this row was generated by the recurring processor.
+  isRecurring        Boolean              @default(false)
+  /// Phase 10 — attached documents/receipts.
+  documents          Document[]
+  date               DateTime             @default(now())
+  userId             String
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId          String
+  account            Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId         String?
+  category           Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   /// Set when this row was generated by the recurring processor (Phase 7).
   recurringExpenseId String?
-  recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
-  /// Legacy Phase 1-2 counterparty column (see Account.transferTransactions).
-  transferAccountId String?
-  transferAccount   Account?   @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: SetNull)
+  recurringExpense   RecurringExpense?    @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
   /// Idempotency log entry that produced this row (null for manual rows).
-  occurrence     RecurringOccurrence?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  occurrence         RecurringOccurrence?
+  /// Legacy Phase 1-2 counterparty column (see Account.transferTransactions).
+  transferAccountId  String?
+  transferAccount    Account?             @relation("TransferAccount", fields: [transferAccountId], references: [id], onDelete: SetNull)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
   @@index([userId, date])
   @@index([userId, accountId])
   @@index([userId, categoryId])
@@ -110,75 +139,91 @@ model Transaction {
   @@index([recurringExpenseId])
 }
 
+/// Phase 10 — flexible budget periods (monthly / weekly / yearly / custom),
+/// rollover of unspent amounts, and optional fixed date ranges.
 model Budget {
-  id        String   @id @default(cuid())
-  name      String
-  amount    Int      // stored in minor units (paise)
-  spent     Int      @default(0) // stored in minor units (paise)
-  month     Int
-  year      Int
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  name       String
+  /// MONTHLY | WEEKLY | YEARLY | CUSTOM
+  periodType String    @default("MONTHLY")
+  amount     Int // stored in minor units (paise)
+  spent      Int       @default(0) // stored in minor units (paise)
+  /// For MONTHLY/WEEKLY/YEARLY: the calendar month/week/year this budget applies to.
+  /// For CUSTOM: the start date's month/year are stored here for grouping.
+  month      Int
+  year       Int
+  /// Custom period bounds (only used when periodType = CUSTOM).
+  startDate  DateTime?
+  endDate    DateTime?
+  /// When true, unspent amount at period end rolls into the next period.
+  rollover   Boolean   @default(false)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   categoryId String?
-  category  Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@unique([userId, categoryId, month, year])
-  @@index([userId, month, year])
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // One budget per (user, category, periodType, month/year) OR per custom range.
+  @@unique([userId, categoryId, periodType, month, year])
+  @@index([userId, periodType, month, year])
 }
 
 model SavingsGoal {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  targetAmount Int     // stored in minor units (paise)
-  currentAmount Int    @default(0) // stored in minor units (paise)
-  targetDate  DateTime
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  targetAmount  Int // stored in minor units (paise)
+  currentAmount Int                   @default(0) // stored in minor units (paise)
+  targetDate    DateTime
   /// ACTIVE | COMPLETED | ARCHIVED (validated in the service layer)
-  status      String   @default("ACTIVE")
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountId   String?
-  account     Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  status        String                @default("ACTIVE")
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String?
+  account       Account?              @relation(fields: [accountId], references: [id], onDelete: SetNull)
   contributions SavingsContribution[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
   @@index([userId])
   @@index([userId, status])
 }
 
 model SavingsContribution {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   goalId    String
   goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  amount    Int      // stored in minor units (paise)
-  date      DateTime @default(now())
+  amount    Int // stored in minor units (paise)
+  date      DateTime    @default(now())
   note      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
+
   @@index([goalId, date])
 }
 
 model RecurringExpense {
-  id          String    @id @default(cuid())
-  name        String
-  amount      Int       // stored in minor units (paise)
+  id           String                @id @default(cuid())
+  name         String
+  amount       Int // stored in minor units (paise)
   /// WEEKLY | MONTHLY | QUARTERLY | YEARLY (validated in the service layer)
-  frequency   String
-  nextDueDate DateTime
-  description String?
-  isActive    Boolean   @default(true)
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountId   String
-  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  categoryId  String
-  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  frequency    String
+  nextDueDate  DateTime
+  description  String?
+  isActive     Boolean               @default(true)
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      Account               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   /// Rows this item generated through the recurring processor (Phase 7).
   transactions Transaction[]
   /// Idempotency / failure log — one row per attempted due date.
   occurrences  RecurringOccurrence[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
   @@index([userId])
   @@index([userId, isActive, nextDueDate])
 }
@@ -191,7 +236,7 @@ model RecurringExpense {
 /// +amount) inside one database transaction together with this row.
 model Transfer {
   id            String   @id @default(cuid())
-  amount        Int      // stored in minor units (paise)
+  amount        Int // stored in minor units (paise)
   date          DateTime @default(now())
   description   String?
   userId        String
@@ -202,6 +247,7 @@ model Transfer {
   toAccount     Account  @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
   @@index([userId, date])
   @@index([userId, fromAccountId])
   @@index([userId, toAccountId])
@@ -215,20 +261,21 @@ model Transfer {
 /// no-op instead of a duplicate charge. A failed attempt is recorded with
 /// status FAILED + failureReason and the due date is NOT advanced.
 model RecurringOccurrence {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   recurringExpenseId String
-  recurringExpense   RecurringExpense  @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
+  recurringExpense   RecurringExpense @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
   userId             String
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   dueDate            DateTime
   /// CREATED | FAILED (validated in the service layer)
   status             String
-  transactionId      String?           @unique
-  transaction        Transaction?      @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  transactionId      String?          @unique
+  transaction        Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   failureReason      String?
-  attemptCount       Int               @default(1)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  attemptCount       Int              @default(1)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
   @@unique([recurringExpenseId, dueDate])
   @@index([userId, status])
   @@index([userId, dueDate])
@@ -252,7 +299,139 @@ model ReportHistory {
   startDate String
   endDate   String
   createdAt DateTime @default(now())
+
   @@index([userId, createdAt])
+}
+
+/// Phase 10 — money borrowed by the user or lent to others.
+/// Principal is tracked separately from interest so it never distorts income/
+/// expense reporting or net worth calculations.
+model Debt {
+  id                String        @id @default(cuid())
+  /// BORROWED (I owe) | LENT (someone owes me)
+  type              String
+  name              String
+  description       String?
+  /// Original principal in minor units (paise).
+  principalAmount   Int
+  /// Remaining principal in minor units (paise).
+  outstandingAmount Int
+  /// Annual interest rate as a percentage (e.g. 12 for 12%).
+  interestRate      Decimal?
+  /// Next due date for a repayment/collection.
+  nextDueDate       DateTime?
+  /// ACTIVE | CLOSED | ARCHIVED
+  status            String        @default("ACTIVE")
+  /// Linked account used for repayments/collections (optional).
+  accountId         String?
+  account           Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments          DebtPayment[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId, type, status])
+  @@index([userId, nextDueDate])
+}
+
+/// Phase 10 — each repayment or collection against a Debt, split into
+/// principal and interest portions so principal never distorts P&L.
+model DebtPayment {
+  id               String   @id @default(cuid())
+  /// REPAYMENT (paying down a borrowed debt) | COLLECTION (receiving on a lent debt)
+  type             String
+  /// Total payment amount in minor units (paise).
+  amount           Int
+  /// Portion that reduces/increases principal.
+  principalPortion Int
+  /// Portion that is interest expense/income.
+  interestPortion  Int
+  date             DateTime @default(now())
+  note             String?
+  debtId           String
+  debt             Debt     @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([debtId, date])
+  @@index([userId, date])
+}
+
+/// Phase 10 — manual investment portfolio tracking.
+/// Live market prices are never fabricated; valuations are user-entered and
+/// stamped with `currentValuationDate`.
+model Investment {
+  id                   String                  @id @default(cuid())
+  /// STOCK | MUTUAL_FUND | SIP | FIXED_DEPOSIT | RECURRING_DEPOSIT |
+  /// GOLD | CRYPTOCURRENCY | OTHER
+  type                 String
+  name                 String
+  description          String?
+  /// Total amount invested to date in minor units (paise).
+  investmentAmount     Int                     @default(0)
+  /// Current user-entered valuation in minor units (paise).
+  currentValue         Int                     @default(0)
+  /// Number of units held (e.g. shares, mutual fund units, grams).
+  units                Decimal?
+  /// Date of the first/purchase investment.
+  purchaseDate         DateTime
+  /// When `currentValue` was last entered by the user.
+  currentValuationDate DateTime?
+  /// Linked account (optional, e.g. the demat/bank account used).
+  accountId            String?
+  account              Account?                @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  userId               String
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         InvestmentTransaction[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([userId, type])
+  @@index([userId, purchaseDate])
+}
+
+/// Phase 10 — buy/sell history for an Investment.
+model InvestmentTransaction {
+  id           String     @id @default(cuid())
+  /// PURCHASE | SALE
+  type         String
+  /// Transaction amount in minor units (paise).
+  amount       Int
+  /// Units bought or sold in this transaction.
+  units        Decimal?
+  /// Price per unit in minor units (paise) at transaction time.
+  pricePerUnit Int?
+  date         DateTime   @default(now())
+  note         String?
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@index([investmentId, date])
+}
+
+/// Phase 10 — attached receipts, bills, invoices and financial documents.
+/// Files are stored locally (file path); the app never uploads them externally.
+model Document {
+  id            String       @id @default(cuid())
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  fileName      String
+  filePath      String // local path on the device / server
+  fileType      String // mime type
+  fileSize      Int // bytes
+  uploadedAt    DateTime     @default(now())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+
+  @@index([userId, uploadedAt])
+  @@index([transactionId])
 }
 
 /// Phase 9 — in-app notifications, reminders and financial alerts.
@@ -263,23 +442,24 @@ model ReportHistory {
 /// makes creation idempotent: the unique (userId, dedupeKey) index means a
 /// second create with the same key is a no-op instead of a duplicate.
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// BUDGET_WARNING | BUDGET_EXCEEDED | UPCOMING_PAYMENT | PAYMENT_PROCESSED |
   /// PAYMENT_FAILED | GOAL_COMPLETED | GOAL_DEADLINE | LOW_BALANCE | SYSTEM
   type      String
   /// INFO | WARNING | IMPORTANT
-  priority  String   @default("INFO")
+  priority  String    @default("INFO")
   title     String
   message   String
-  isRead    Boolean  @default(false)
+  isRead    Boolean   @default(false)
   readAt    DateTime?
   /// JSON string with type-specific context (ids, amounts, dates).
   metadata  String?
   /// Per-user idempotency key. NULL rows are never deduped.
   dedupeKey String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
   @@index([userId, isRead])
@@ -290,16 +470,16 @@ model Notification {
 /// Each toggle gates creation of its notification category; SYSTEM
 /// notifications are never toggleable.
 model NotificationPreference {
-  id        String  @id @default(cuid())
-  userId    String  @unique
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  budgetAlerts       Boolean @default(true)
-  upcomingPayments   Boolean @default(true)
-  paymentProcessing  Boolean @default(true)
-  savingsGoals       Boolean @default(true)
-  lowBalance         Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetAlerts      Boolean  @default(true)
+  upcomingPayments  Boolean  @default(true)
+  paymentProcessing Boolean  @default(true)
+  savingsGoals      Boolean  @default(true)
+  lowBalance        Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 /// Phase 1 — audit trail for security-relevant and money-moving operations.
@@ -331,6 +511,7 @@ model AuditEvent {
   /// JSON string with action-specific, non-sensitive context.
   metadata  String?
   createdAt DateTime @default(now())
+
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@index([createdAt])

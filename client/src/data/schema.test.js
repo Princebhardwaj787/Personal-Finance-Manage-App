@@ -32,17 +32,20 @@ describe('local database bootstrap', () => {
       'SavingsGoal', 'SavingsContribution', 'RecurringExpense',
       'Transfer', 'RecurringOccurrence', 'ReportHistory',
       'Notification', 'NotificationPreference', 'AuditEvent',
-      'AppSetting', '_LocalMigrations'
+      'AppSetting', '_LocalMigrations',
+      'Debt', 'DebtPayment', 'Investment', 'InvestmentTransaction', 'Document'
     ]) {
       expect(names, `missing table ${expected}`).toContain(expected);
     }
   });
 
   it('records the applied migration version', async () => {
-    const rows = await db.select('SELECT version, name FROM "_LocalMigrations"');
-    expect(rows).toHaveLength(1);
-    expect(Number(rows[0].version)).toBe(SCHEMA_VERSION);
+    const rows = await db.select('SELECT version, name FROM "_LocalMigrations" ORDER BY version');
+    expect(rows).toHaveLength(2);
+    expect(Number(rows[0].version)).toBe(1);
     expect(rows[0].name).toBe('initial_schema');
+    expect(Number(rows[1].version)).toBe(SCHEMA_VERSION);
+    expect(rows[1].name).toBe('add_debt_investment_document_and_transaction_fields');
   });
 
   it('is idempotent — running bootstrap again changes nothing', async () => {

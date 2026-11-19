@@ -18,7 +18,7 @@
  */
 
 /** Bumped whenever a migration is added. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** The single local user that owns every record on the device. */
 export const LOCAL_USER_ID = 'local-user';
@@ -320,6 +320,129 @@ export const MIGRATIONS = [
             "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`
       ];
+
+      for (const statement of statements) {
+        await db.execute(statement);
+      }
+    }
+  },
+  {
+    version: 2,
+    name: 'add_debt_investment_document_and_transaction_fields',
+    up: async (db) => {
+      const statements = [];
+
+      statements.push(`
+        CREATE TABLE IF NOT EXISTS "Debt" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "type" TEXT NOT NULL,
+            "name" TEXT NOT NULL,
+            "description" TEXT,
+            "principalAmount" INTEGER NOT NULL,
+            "outstandingAmount" INTEGER NOT NULL,
+            "interestRate" REAL,
+            "nextDueDate" DATETIME,
+            "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+            "accountId" TEXT,
+            "userId" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "Debt_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT "Debt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Debt_userId_type_status_idx" ON "Debt"("userId", "type", "status")`);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Debt_userId_nextDueDate_idx" ON "Debt"("userId", "nextDueDate")`);
+
+      statements.push(`
+        CREATE TABLE IF NOT EXISTS "DebtPayment" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "type" TEXT NOT NULL,
+            "amount" INTEGER NOT NULL,
+            "principalPortion" INTEGER NOT NULL,
+            "interestPortion" INTEGER NOT NULL,
+            "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "note" TEXT,
+            "debtId" TEXT NOT NULL,
+            "userId" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "DebtPayment_debtId_fkey" FOREIGN KEY ("debtId") REFERENCES "Debt" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT "DebtPayment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      statements.push(`CREATE INDEX IF NOT EXISTS "DebtPayment_debtId_date_idx" ON "DebtPayment"("debtId", "date")`);
+      statements.push(`CREATE INDEX IF NOT EXISTS "DebtPayment_userId_date_idx" ON "DebtPayment"("userId", "date")`);
+
+      statements.push(`
+        CREATE TABLE IF NOT EXISTS "Investment" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "type" TEXT NOT NULL,
+            "name" TEXT NOT NULL,
+            "description" TEXT,
+            "investmentAmount" INTEGER NOT NULL DEFAULT 0,
+            "currentValue" INTEGER NOT NULL DEFAULT 0,
+            "units" REAL,
+            "purchaseDate" DATETIME NOT NULL,
+            "currentValuationDate" DATETIME,
+            "accountId" TEXT,
+            "userId" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "Investment_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT "Investment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Investment_userId_type_idx" ON "Investment"("userId", "type")`);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Investment_userId_purchaseDate_idx" ON "Investment"("userId", "purchaseDate")`);
+
+      statements.push(`
+        CREATE TABLE IF NOT EXISTS "InvestmentTransaction" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "type" TEXT NOT NULL,
+            "amount" INTEGER NOT NULL,
+            "units" REAL,
+            "pricePerUnit" INTEGER,
+            "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "note" TEXT,
+            "investmentId" TEXT NOT NULL,
+            "userId" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "InvestmentTransaction_investmentId_fkey" FOREIGN KEY ("investmentId") REFERENCES "Investment" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT "InvestmentTransaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      statements.push(`CREATE INDEX IF NOT EXISTS "InvestmentTransaction_investmentId_date_idx" ON "InvestmentTransaction"("investmentId", "date")`);
+
+      statements.push(`
+        CREATE TABLE IF NOT EXISTS "Document" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "transactionId" TEXT,
+            "fileName" TEXT NOT NULL,
+            "filePath" TEXT NOT NULL,
+            "fileType" TEXT NOT NULL,
+            "fileSize" INTEGER NOT NULL,
+            "uploadedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "userId" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "Document_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+            CONSTRAINT "Document_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        )
+      `);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Document_userId_uploadedAt_idx" ON "Document"("userId", "uploadedAt")`);
+      statements.push(`CREATE INDEX IF NOT EXISTS "Document_transactionId_idx" ON "Document"("transactionId")`);
+
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "paymentMethod" TEXT`);
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "merchant" TEXT`);
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "tags" TEXT`);
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "subcategory" TEXT`);
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "attachmentUrl" TEXT`);
+      statements.push(`ALTER TABLE "Transaction" ADD COLUMN "isRecurring" BOOLEAN NOT NULL DEFAULT 0`);
+
+      statements.push(`ALTER TABLE "Budget" ADD COLUMN "periodType" TEXT NOT NULL DEFAULT 'MONTHLY'`);
+      statements.push(`ALTER TABLE "Budget" ADD COLUMN "rollover" BOOLEAN NOT NULL DEFAULT 0`);
+      statements.push(`ALTER TABLE "Budget" ADD COLUMN "startDate" DATETIME`);
+      statements.push(`ALTER TABLE "Budget" ADD COLUMN "endDate" DATETIME`);
 
       for (const statement of statements) {
         await db.execute(statement);

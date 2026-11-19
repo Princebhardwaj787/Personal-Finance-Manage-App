@@ -29,6 +29,7 @@ const EXPECTED_SQLITE_TYPES = {
   String: 'TEXT',
   Int: 'INTEGER',
   Float: 'REAL',
+  Decimal: 'REAL',
   Boolean: 'BOOLEAN',
   DateTime: 'DATETIME'
 };

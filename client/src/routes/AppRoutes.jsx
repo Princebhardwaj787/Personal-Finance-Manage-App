@@ -1,22 +1,31 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ProtectedRoute from './ProtectedRoute';
 import Layout from '../components/layout/Layout';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
-import Dashboard from '../pages/Dashboard';
-import Profile from '../pages/Profile';
-import Accounts from '../pages/Accounts';
-import Categories from '../pages/Categories';
-import Transactions from '../pages/Transactions';
-import BudgetPage from '../pages/BudgetPage';
-import SavingsGoals from '../pages/SavingsGoals';
-import RecurringExpenses from '../pages/RecurringExpenses';
-import Transfers from '../pages/Transfers';
-import Reports from '../pages/Reports';
-import Notifications from '../pages/Notifications';
-import NotificationSettings from '../pages/settings/NotificationSettings';
-import BackupSettings from '../pages/settings/BackupSettings';
+
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+  </div>
+);
+
+// Auth pages are small; load them eagerly.
+const Dashboard = lazy(() => import('../pages/Dashboard').then((mod) => ({ default: mod.Default ?? mod })));
+const Profile = lazy(() => import('../pages/Profile').then((mod) => ({ default: mod.Default ?? mod })));
+const Accounts = lazy(() => import('../pages/Accounts').then((mod) => ({ default: mod.Default ?? mod })));
+const Categories = lazy(() => import('../pages/Categories').then((mod) => ({ default: mod.Default ?? mod })));
+const Transactions = lazy(() => import('../pages/Transactions').then((mod) => ({ default: mod.Default ?? mod })));
+const Transfers = lazy(() => import('../pages/Transfers').then((mod) => ({ default: mod.Default ?? mod })));
+const Reports = lazy(() => import('../pages/Reports').then((mod) => ({ default: mod.Default ?? mod })));
+const Notifications = lazy(() => import('../pages/Notifications').then((mod) => ({ default: mod.Default ?? mod })));
+const BudgetPage = lazy(() => import('../pages/BudgetPage').then((mod) => ({ default: mod.Default ?? mod })));
+const SavingsGoals = lazy(() => import('../pages/SavingsGoals').then((mod) => ({ default: mod.Default ?? mod })));
+const RecurringExpenses = lazy(() => import('../pages/RecurringExpenses').then((mod) => ({ default: mod.Default ?? mod })));
+const NotificationSettings = lazy(() => import('../pages/settings/NotificationSettings').then((mod) => ({ default: mod.Default ?? mod })));
+const BackupSettings = lazy(() => import('../pages/settings/BackupSettings').then((mod) => ({ default: mod.Default ?? mod })));
 
 /**
  * On the ANDROID build there is no server and no account, so the sign-in
@@ -49,7 +58,13 @@ export default function AppRoutes() {
         }
       />
 
-      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+      <Route element={
+        <Suspense fallback={<LoadingFallback />}>
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        </Suspense>
+      }>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />

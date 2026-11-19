@@ -16,8 +16,48 @@ import { toMinorUnits, fromMinorUnits } from '../utils/money.js';
  * filter can only narrow a query — it can never widen it beyond the caller.
  */
 
-/** Phase 7: transfers live in their own table and are never Transactions. */
-export const TRANSACTION_TYPES = Object.freeze(['INCOME', 'EXPENSE']);
+/**
+ * All transaction types. Transfers live in their own table and are never
+ * Transactions, so they can never be counted as income or expense.
+ *
+ * Balance impact:
+ *   +amount: INCOME, REFUND, CASH_DEPOSIT, LOAN_DISBURSED, LOAN_COLLECTION, INVESTMENT_SALE
+ *   -amount: EXPENSE, CASH_WITHDRAWAL, LOAN_REPAYMENT, INVESTMENT_PURCHASE
+ *
+ * Income/expense reporting counts only INCOME (income) and EXPENSE (expense).
+ * REFUND reduces net expenses. Loan principal and investment purchases are
+ * balance-sheet movements, never income or expense.
+ */
+export const TRANSACTION_TYPES = Object.freeze([
+  'INCOME',
+  'EXPENSE',
+  'REFUND',
+  'CASH_WITHDRAWAL',
+  'CASH_DEPOSIT',
+  'LOAN_DISBURSED',
+  'LOAN_REPAYMENT',
+  'LOAN_COLLECTION',
+  'INVESTMENT_PURCHASE',
+  'INVESTMENT_SALE',
+  'ADJUSTMENT'
+]);
+
+/** Types that increase the account balance. */
+export const BALANCE_INCREASING_TYPES = Object.freeze([
+  'INCOME', 'REFUND', 'CASH_DEPOSIT', 'LOAN_DISBURSED', 'LOAN_COLLECTION',
+  'INVESTMENT_SALE', 'ADJUSTMENT'
+]);
+
+/** Types that decrease the account balance. */
+export const BALANCE_DECREASING_TYPES = Object.freeze([
+  'EXPENSE', 'CASH_WITHDRAWAL', 'LOAN_REPAYMENT', 'INVESTMENT_PURCHASE'
+]);
+
+/** Types counted as income in the P&L summary. */
+export const INCOME_TYPES = Object.freeze(['INCOME']);
+
+/** Types counted as expense in the P&L summary. REFUND reduces expenses. */
+export const EXPENSE_TYPES = Object.freeze(['EXPENSE']);
 
 /** Whitelists — user input is NEVER interpolated into an order-by (§E). */
 export const SORTABLE_FIELDS = Object.freeze(['date', 'amount', 'createdAt']);
@@ -38,6 +78,12 @@ const TRANSACTION_SELECT = {
   description: true,
   notes: true,
   reference: true,
+  paymentMethod: true,
+  merchant: true,
+  tags: true,
+  subcategory: true,
+  attachmentUrl: true,
+  isRecurring: true,
   date: true,
   accountId: true,
   categoryId: true,
@@ -82,7 +128,7 @@ const parseDate = (value, field = 'Date') => {
  * notes, reference, category name and account name — all evaluated in SQL.
  */
 export const buildTransactionWhere = (userId, filters = {}) => {
-  const { type, accountId, categoryId, startDate, endDate, minAmount, maxAmount, search } = filters;
+  const { type, accountId, categoryId, startDate, endDate, minAmount, maxAmount, paymentMethod, merchant, search } = filters;
 
   const where = { userId };
 
@@ -92,6 +138,9 @@ export const buildTransactionWhere = (userId, filters = {}) => {
     }
     where.type = type;
   }
+
+  if (paymentMethod) where.paymentMethod = paymentMethod;
+  if (merchant) where.merchant = { contains: merchant };
   if (accountId) where.accountId = accountId;
   if (categoryId) where.categoryId = categoryId;
 
@@ -153,6 +202,12 @@ export const serializeTransaction = (transaction) => ({
   description: transaction.description ?? null,
   notes: transaction.notes ?? null,
   reference: transaction.reference ?? null,
+  paymentMethod: transaction.paymentMethod ?? null,
+  merchant: transaction.merchant ?? null,
+  tags: transaction.tags ?? null,
+  subcategory: transaction.subcategory ?? null,
+  attachmentUrl: transaction.attachmentUrl ?? null,
+  isRecurring: Boolean(transaction.isRecurring),
   date: transaction.date,
   accountId: transaction.accountId,
   categoryId: transaction.categoryId ?? null,
@@ -218,6 +273,10 @@ const findOwned = async (userId, transactionId) => {
 export const getTransactionById = async (userId, transactionId) =>
   serializeTransaction(await findOwned(userId, transactionId));
 
+/** Signed balance impact of a type (minor units). INCOME-like types increase, EXPENSE-like decrease. */
+const signedAmount = (type, amount) =>
+  BALANCE_INCREASING_TYPES.includes(type) ? amount : -amount;
+
 export const createTransaction = async (userId, data) => {
   const type = data.type;
   if (!TRANSACTION_TYPES.includes(type)) {
@@ -231,6 +290,11 @@ export const createTransaction = async (userId, data) => {
   const description = optionalText(data.description, MAX_DESCRIPTION_LENGTH, 'Description');
   const notes = optionalText(data.notes, MAX_NOTES_LENGTH, 'Notes');
   const reference = optionalText(data.reference, MAX_REFERENCE_LENGTH, 'Reference');
+  const paymentMethod = optionalText(data.paymentMethod, 50, 'Payment method');
+  const merchant = optionalText(data.merchant, 200, 'Merchant');
+  const tags = optionalText(data.tags, 200, 'Tags');
+  const subcategory = optionalText(data.subcategory, 100, 'Subcategory');
+  const attachmentUrl = optionalText(data.attachmentUrl, 500, 'Attachment URL');
   const date = parseDate(data.date, 'Date') ?? new Date();
 
   if (!data.accountId) throw new AppError('Account is required', 400);
@@ -243,8 +307,8 @@ export const createTransaction = async (userId, data) => {
 
   if (data.categoryId) {
     const category = await prisma.category.findFirst({
-      where: { id: data.categoryId, userId, type },
-      select: { id: true }
+      where: { id: data.categoryId, userId },
+      select: { id: true, type: true }
     });
     if (!category) throw new AppError('Invalid category for this transaction type', 400);
   }
@@ -252,7 +316,7 @@ export const createTransaction = async (userId, data) => {
   return prisma.$transaction(async (tx) => {
     await tx.account.update({
       where: { id: account.id },
-      data: { balance: { increment: type === 'INCOME' ? amount : -amount } }
+      data: { balance: { increment: signedAmount(type, amount) } }
     });
 
     const transaction = await tx.transaction.create({
@@ -262,6 +326,12 @@ export const createTransaction = async (userId, data) => {
         description,
         notes,
         reference,
+        paymentMethod,
+        merchant,
+        tags,
+        subcategory,
+        attachmentUrl,
+        isRecurring: Boolean(data.isRecurring),
         date,
         userId,
         accountId: account.id,
@@ -299,6 +369,17 @@ export const updateTransaction = async (userId, transactionId, data) => {
     data.reference !== undefined
       ? optionalText(data.reference, MAX_REFERENCE_LENGTH, 'Reference')
       : existing.reference;
+  const newPaymentMethod =
+    data.paymentMethod !== undefined ? optionalText(data.paymentMethod, 50, 'Payment method') : existing.paymentMethod;
+  const newMerchant =
+    data.merchant !== undefined ? optionalText(data.merchant, 200, 'Merchant') : existing.merchant;
+  const newTags =
+    data.tags !== undefined ? optionalText(data.tags, 200, 'Tags') : existing.tags;
+  const newSubcategory =
+    data.subcategory !== undefined ? optionalText(data.subcategory, 100, 'Subcategory') : existing.subcategory;
+  const newAttachmentUrl =
+    data.attachmentUrl !== undefined ? optionalText(data.attachmentUrl, 500, 'Attachment URL') : existing.attachmentUrl;
+  const newIsRecurring = data.isRecurring !== undefined ? Boolean(data.isRecurring) : existing.isRecurring;
 
   if (newAccountId !== existing.accountId) {
     const account = await prisma.account.findFirst({
@@ -310,17 +391,16 @@ export const updateTransaction = async (userId, transactionId, data) => {
 
   if (newCategoryId) {
     const category = await prisma.category.findFirst({
-      where: { id: newCategoryId, userId, type: newType },
-      select: { id: true }
+      where: { id: newCategoryId, userId },
+      select: { id: true, type: true }
     });
     if (!category) throw new AppError('Invalid category for this transaction type', 400);
   }
 
   // Balance maths: reverse exactly what the old row did, apply what the new
   // row does — one atomic step, never two half-applied updates.
-  const signed = (type, amount) => (type === 'INCOME' ? amount : -amount);
-  const oldDelta = signed(existing.type, existing.amount);
-  const newDelta = signed(newType, newAmount);
+  const oldDelta = signedAmount(existing.type, existing.amount);
+  const newDelta = signedAmount(newType, newAmount);
 
   return prisma.$transaction(async (tx) => {
     if (existing.accountId === newAccountId) {
@@ -349,7 +429,13 @@ export const updateTransaction = async (userId, transactionId, data) => {
         categoryId: newCategoryId ?? null,
         description: newDescription,
         notes: newNotes,
-        reference: newReference
+        reference: newReference,
+        paymentMethod: newPaymentMethod,
+        merchant: newMerchant,
+        tags: newTags,
+        subcategory: newSubcategory,
+        attachmentUrl: newAttachmentUrl,
+        isRecurring: newIsRecurring
       },
       select: TRANSACTION_SELECT
     });
@@ -389,6 +475,11 @@ export const duplicateTransaction = async (userId, transactionId, payload = {}) 
     description: source.description,
     notes: source.notes,
     reference: source.reference,
+    paymentMethod: source.paymentMethod,
+    merchant: source.merchant,
+    tags: source.tags,
+    subcategory: source.subcategory,
+    attachmentUrl: source.attachmentUrl,
     date: payload.date ? parseDate(payload.date, 'Date') ?? new Date() : new Date(),
     accountId: source.accountId,
     categoryId: source.categoryId
@@ -448,8 +539,8 @@ export const getTransactionSummary = async (userId, options = {}) => {
   const where = buildTransactionWhere(userId, options);
 
   const [income, expenses] = await Promise.all([
-    prisma.transaction.aggregate({ where: { ...where, type: 'INCOME' }, _sum: { amount: true } }),
-    prisma.transaction.aggregate({ where: { ...where, type: 'EXPENSE' }, _sum: { amount: true } })
+    prisma.transaction.aggregate({ where: { ...where, type: { in: INCOME_TYPES } }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({ where: { ...where, type: { in: EXPENSE_TYPES } }, _sum: { amount: true } })
   ]);
 
   const totalIncomeMinor = income._sum.amount || 0;
